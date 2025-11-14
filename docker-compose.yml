@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  prometheus-light:
+    build: .
+    container_name: prometheus-light
+    volumes:
+      - ./data:/data
+      - ./watch:/watch
+    environment:
+      - MYDATA_HOME=/data
+      - MYDATA_PASSPHRASE=${MYDATA_PASSPHRASE}
+      - WATCH_DIRECTORIES=/watch
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+
+  # Optional: Standalone Qdrant (if you want separate container)
+  # qdrant:
+  #   image: qdrant/qdrant:latest
+  #   container_name: prometheus-qdrant
+  #   volumes:
+  #     - ./qdrant_data:/qdrant/storage
+  #   ports:
+  #     - "6333:6333"
+  #   restart: unless-stopped

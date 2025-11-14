@@ -1,0 +1,46 @@
+[project]
+name = "mydata"
+version = "0.1.0"
+description = "Encrypted, local-first personal data organizer with ML"
+requires-python = ">=3.8"
+dependencies = [
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "sqlmodel>=0.0.14",
+    "qdrant-client>=1.7.0",
+    "sentence-transformers>=2.3.0",
+    "hdbscan>=0.8.33",
+    "umap-learn>=0.5.5",
+    "watchdog>=4.0.0",
+    "rich>=13.7.0",
+    "typer>=0.9.0",
+    "cryptography>=42.0.0",
+    "pypdf>=4.0.0",
+    "python-multipart>=0.0.6",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "requests>=2.31.0",
+    "pywin32>=306; platform_system=='Windows'",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "black>=23.12.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+mydata = "mydata.cli:app"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

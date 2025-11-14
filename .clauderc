@@ -1,0 +1,11 @@
+{
+  "name": "Promethean Light - God Mode",
+  "description": "Your encrypted, ML-powered personal knowledge base",
+  "mcp_servers": {
+    "promethean-light": {
+      "command": "python",
+      "args": ["mcp_server.py"],
+      "description": "Access your Promethean Light knowledge base"
+    }
+  }
+}
