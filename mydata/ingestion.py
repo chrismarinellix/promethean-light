@@ -80,6 +80,11 @@ class IngestionPipeline:
 
     def ingest_text(self, text: str, source: str = "stdin") -> Optional[UUID]:
         """Ingest raw text (from paste or other sources)"""
+        # Check for semantic duplicates
+        if self._is_semantic_duplicate(text):
+            print(f"⚠ Semantically similar content already exists (skipping)")
+            return None
+
         # Create document
         doc = Document(
             source=source,
@@ -101,6 +106,12 @@ class IngestionPipeline:
         """Ingest an email"""
         text = email_data["full_text"]
         source = f"email://{email_data.get('sender', 'unknown')}/{email_data.get('uid', 'unknown')}"
+
+        # Check for semantic duplicates (emails can be forwarded/duplicated)
+        if self._is_semantic_duplicate(text, threshold=0.98):
+            subject = email_data.get("subject", "(no subject)")[:30]
+            print(f"⚠ Duplicate email skipped: {subject}...")
+            return None
 
         # Create document
         doc = Document(
@@ -181,6 +192,29 @@ class IngestionPipeline:
             chunks.append(current_chunk.strip())
 
         return chunks if chunks else [text[:max_length]]
+
+    def _is_semantic_duplicate(self, text: str, threshold: float = 0.95) -> bool:
+        """Check if semantically similar document already exists"""
+        # Use first 500 chars as sample for speed
+        sample = text[:500] if len(text) > 500 else text
+
+        try:
+            # Embed the sample
+            query_emb = self.embedder.embed(sample)
+
+            # Search for similar documents
+            results = self.vectordb.search(
+                query_vector=query_emb,
+                limit=1,
+                score_threshold=threshold
+            )
+
+            return len(results) > 0
+
+        except Exception as e:
+            # If check fails, allow ingestion (fail open)
+            print(f"⚠ Semantic dedup check failed: {e}")
+            return False
 
     def _detect_mime_type(self, file_path: Path) -> str:
         """Detect MIME type from file extension"""
