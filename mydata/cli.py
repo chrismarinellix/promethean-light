@@ -329,6 +329,7 @@ def daemon():
 
     try:
         from .daemon import Daemon
+        from .settings import settings
 
         # Show banner
         print_banner(style="simple")
@@ -339,7 +340,7 @@ def daemon():
         logger.info("Crypto unlocked")
 
         logger.info("Initializing daemon...")
-        daemon = Daemon(crypto)
+        daemon = Daemon(crypto, settings)
 
         logger.info("Starting daemon services...")
         daemon.start()

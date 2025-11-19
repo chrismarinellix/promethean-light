@@ -7,6 +7,17 @@ from typing import Any
 import requests
 
 
+def _require_daemon(func):
+    """Decorator to ensure the daemon is running before executing a method."""
+    def wrapper(self, *args, **kwargs):
+        if not self.is_daemon_running():
+            return {
+                "error": "Promethean Light daemon not running. Start it with START.bat"
+            }
+        return func(self, *args, **kwargs)
+    return wrapper
+
+
 class PrometheanLightMCP:
     """MCP Server for Promethean Light database"""
 
@@ -21,13 +32,9 @@ class PrometheanLightMCP:
         except Exception:
             return False
 
+    @_require_daemon
     def search(self, query: str, limit: int = 10) -> dict:
         """Search the Promethean Light database"""
-        if not self.is_daemon_running():
-            return {
-                "error": "Promethean Light daemon not running. Start it with START.bat"
-            }
-
         try:
             response = requests.post(
                 f"{self.base_url}/search",
@@ -46,13 +53,9 @@ class PrometheanLightMCP:
         except Exception as e:
             return {"error": str(e)}
 
+    @_require_daemon
     def add_note(self, text: str) -> dict:
         """Add a note to Promethean Light"""
-        if not self.is_daemon_running():
-            return {
-                "error": "Promethean Light daemon not running. Start it with START.bat"
-            }
-
         try:
             response = requests.post(
                 f"{self.base_url}/add",
@@ -64,13 +67,9 @@ class PrometheanLightMCP:
         except Exception as e:
             return {"error": str(e)}
 
+    @_require_daemon
     def get_stats(self) -> dict:
         """Get database statistics"""
-        if not self.is_daemon_running():
-            return {
-                "error": "Promethean Light daemon not running. Start it with START.bat"
-            }
-
         try:
             response = requests.get(f"{self.base_url}/stats", timeout=5)
             response.raise_for_status()
@@ -78,13 +77,9 @@ class PrometheanLightMCP:
         except Exception as e:
             return {"error": str(e)}
 
+    @_require_daemon
     def get_tags(self) -> dict:
         """Get all tags from the database"""
-        if not self.is_daemon_running():
-            return {
-                "error": "Promethean Light daemon not running. Start it with START.bat"
-            }
-
         try:
             response = requests.get(f"{self.base_url}/tags", timeout=5)
             response.raise_for_status()

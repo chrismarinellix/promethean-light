@@ -1,13 +1,13 @@
 """API client for talking to running daemon"""
 
-import requests
 from typing import Optional, List, Dict
+from .settings import settings
 
 
 class Client:
     """Client for talking to Promethean Light daemon API"""
 
-    def __init__(self, base_url: str = "http://localhost:8000"):
+    def __init__(self, base_url: str = f"http://{settings.api_host}:{settings.api_port}"):
         self.base_url = base_url
 
     def is_alive(self) -> bool:

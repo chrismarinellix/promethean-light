@@ -15,22 +15,29 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
-echo "[1/4] Installing Prometheus Light..."
-pip3 install -e .
+echo "[1/4] Creating virtual environment..."
+if [ ! -d "venv" ]; then
+    python3 -m venv venv
+fi
+source venv/bin/activate
 
 echo ""
-echo "[2/4] Creating data directory..."
+echo "[2/4] Installing Prometheus Light..."
+pip install -e .
+
+echo ""
+echo "[3/4] Creating data directory..."
 mkdir -p ~/.mydata
 
 echo ""
-echo "[3/4] Setting up environment..."
+echo "[4/4] Setting up environment..."
 cat > .env << EOF
 # Prometheus Light Environment
 MYDATA_HOME=$HOME/.mydata
 EOF
 
 echo ""
-echo "[4/4] Running first-time setup..."
+echo "[5/5] Running first-time setup..."
 echo ""
 mydata setup
 

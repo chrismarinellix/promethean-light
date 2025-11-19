@@ -14,6 +14,7 @@ from .ingestion import IngestionPipeline
 from .cache import get_cache, cached
 from sqlmodel import select
 from .models import Document, Tag, Cluster
+import threading
 
 
 # Request/Response models
@@ -56,7 +57,7 @@ _vectordb: Optional[VectorDB] = None
 _pipeline: Optional[IngestionPipeline] = None
 
 
-def init_services(crypto, db, storage, embedder, vectordb, pipeline):
+def init_services(crypto, db, storage, embedder, vectordb, pipeline, api_startup_event: threading.Event):
     """Initialize services from daemon (skip startup event)"""
     global _db, _crypto, _storage, _embedder, _vectordb, _pipeline
     _crypto = crypto
@@ -65,6 +66,7 @@ def init_services(crypto, db, storage, embedder, vectordb, pipeline):
     _embedder = embedder
     _vectordb = vectordb
     _pipeline = pipeline
+    api_startup_event.set() # Signal that API services are initialized and ready
 
 
 @app.on_event("startup")
