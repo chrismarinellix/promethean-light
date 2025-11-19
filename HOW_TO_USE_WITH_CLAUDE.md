@@ -13,9 +13,15 @@ You're already doing it right now! Here's what you have:
 ### Step 1: Start the Daemon (Once per session)
 
 In one terminal:
+
+**Windows:**
 ```powershell
-cd "C:\Code\Promethian  Light"
-START.bat
+.\launch.ps1
+```
+
+**Linux/macOS:**
+```bash
+./launch.sh
 ```
 
 Leave this running! It watches your files and emails.
@@ -94,11 +100,11 @@ Now you have:
 
 ## Daily Workflow
 
-1. **Morning:** Run `START.bat` (starts daemon)
-2. **All day:** Work with Claude Code in this folder
-3. **Ask me anything about your data** - I'll search it!
-4. **Drop files/receive emails** - Auto-ingested
-5. **End of day:** Stop daemon (Ctrl+C)
+1.  **Morning:** Run `./launch.ps1` (Windows) or `./launch.sh` (Linux/macOS) to start the daemon.
+2.  **All day:** Work with Claude Code in this folder
+3.  **Ask me anything about your data** - I'll search it!
+4.  **Drop files/receive emails** - Auto-ingested
+5.  **End of day:** Stop daemon (Ctrl+C)
 
 ## You're in God Mode! 🎉
 

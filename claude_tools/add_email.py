@@ -3,8 +3,8 @@
 
 import sys
 import json
-import requests
 import getpass
+from mydata.client import Client
 
 email_address = sys.argv[1] if len(sys.argv) > 1 else ""
 password = sys.argv[2] if len(sys.argv) > 2 else ""
@@ -17,22 +17,12 @@ if not email_address:
 if not password:
     password = getpass.getpass("Email password: ")
 
-try:
-    response = requests.post(
-        "http://localhost:8000/email/add",
-        json={
-            "email_address": email_address,
-            "password": password,
-            "imap_server": imap_server,
-            "imap_port": 993
-        },
-        timeout=10
-    )
-    response.raise_for_status()
-    result = response.json()
+client = Client()
 
+try:
+    result = client.add_email(email_address=email_address, password=password, imap_server=imap_server)
     print(json.dumps(result, indent=2))
-except requests.exceptions.ConnectionError:
-    print(json.dumps({"error": "Daemon not running. Start with START.bat"}))
-except Exception as e:
+except RuntimeError as e:
     print(json.dumps({"error": str(e)}))
+except Exception as e:
+    print(json.dumps({"error": f"An unexpected error occurred: {e}"}))

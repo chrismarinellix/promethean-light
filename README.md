@@ -41,27 +41,58 @@ Your personal **God Mode** for data:
 
 ## 🚀 Quick Start
 
+**Installation (Windows, Linux, macOS):**
+1. Navigate to your project directory.
+2. Run the appropriate launch script, which will handle virtual environment creation and dependency installation:
+
 **Windows:**
 ```powershell
-cd "C:\Code\Promethian  Light"
-pip install -e .
 .\launch.ps1
 ```
 
 **Linux/macOS:**
 ```bash
-cd "C:/Code/Promethian  Light"
-pip install -e .
 chmod +x launch.sh && ./launch.sh
 ```
 
 **First time setup:**
 ```bash
 mydata setup  # Creates encrypted vault
-mydata daemon  # Start God Mode
+mydata daemon  # Start God Mode (will use configured settings)
 ```
 
 See [QUICKSTART.md](QUICKSTART.md) for full guide.
+
+## ⚙️ Configuration
+
+Prometheus Light uses a `.env` file for configuration. A default `.env` file is created during `mydata setup`. You can customize various settings by editing this file.
+
+**Example `.env` file:**
+```
+# Prometheus Light Environment
+MYDATA_HOME=$HOME/.mydata
+
+# Daemon Settings
+WATCH_DIRECTORIES="~/Documents,~/Downloads"
+ML_LOOP_INTERVAL_SECONDS=300
+
+# API Settings
+API_HOST="127.0.0.1"
+API_PORT=8000
+
+# Email Watcher Settings (macOS Outlook example)
+MAC_OUTLOOK_POLL_INTERVAL=60
+MAC_OUTLOOK_DAYS_BACK=30
+
+# Email Watcher Settings (Windows Outlook example)
+WIN_OUTLOOK_HISTORY_HOURS=1440
+WIN_OUTLOOK_WATCH_SENT=True
+
+# Master passphrase (optional, for automated setups only)
+# MYDATA_PASSPHRASE="your_secret_passphrase"
+```
+
+Refer to `mydata/settings.py` for a complete list of configurable variables and their default values.
 
 ## 📖 Daily Usage
 

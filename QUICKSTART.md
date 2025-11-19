@@ -2,39 +2,33 @@
 
 ## 🚀 Installation
 
-### Windows
+Prometheus Light uses a virtual environment (venv) to manage its Python dependencies. The `launch.ps1` (Windows) and `launch.sh` (Linux/macOS) scripts handle the creation and activation of this venv, as well as installing the necessary packages.
 
+**Windows:**
 ```powershell
 # Navigate to project directory
 cd "C:\Code\Promethian  Light"
 
-# Install package
-pip install -e .
-
-# Run launcher (shows banner and initializes)
+# Run launcher (creates venv, installs dependencies, shows banner and initializes)
 .\launch.ps1
 ```
 
-### Linux / macOS
-
+**Linux / macOS:**
 ```bash
 # Navigate to project directory
 cd "C:/Code/Promethian  Light"
 
-# Install package
-pip install -e .
-
-# Make launcher executable
+# Make launcher executable (if not already)
 chmod +x launch.sh
 
-# Run launcher
+# Run launcher (creates venv, installs dependencies, shows banner and initializes)
 ./launch.sh
 ```
 
 ## 📋 First Time Setup
 
 ```bash
-# Initialize encryption (creates master key)
+# Initialize encryption (creates master key and default .env file)
 mydata setup
 
 # You'll be prompted for a passphrase - remember this!
@@ -61,6 +55,7 @@ This shows the retro ASCII banner and puts you in God Mode!
 
 ```bash
 # Start the background daemon (file watcher + email + ML)
+# The daemon's behavior is configured via the .env file.
 mydata daemon
 
 # Add files
@@ -99,9 +94,53 @@ mydata email-add your@gmail.com
 # 3. Generate app password
 # 4. Use that password when prompted
 
-# Start daemon to begin watching inbox
+# Start daemon to begin watching inbox (will use .env settings for polling)
 mydata daemon
 ```
+
+## ⚙️ Configuration
+
+Prometheus Light's behavior is highly customizable through environment variables, typically managed in a `.env` file located in the project's root directory. A default `.env` file is created during `mydata setup`.
+
+**Example `.env` file:**
+```
+# Prometheus Light Environment
+MYDATA_HOME=$HOME/.mydata
+
+# Daemon Settings
+WATCH_DIRECTORIES="~/Documents,~/Projects,~/Downloads"
+ML_LOOP_INTERVAL_SECONDS=300 # How often (in seconds) the ML organizer runs
+
+# API Settings
+API_HOST="127.0.0.1"
+API_PORT=8000
+
+# Email Watcher Settings (macOS Outlook example)
+MAC_OUTLOOK_POLL_INTERVAL=60 # Polling interval in seconds
+MAC_OUTLOOK_DAYS_BACK=30     # How many days back to fetch emails initially
+
+# Email Watcher Settings (Windows Outlook example)
+WIN_OUTLOOK_HISTORY_HOURS=1440 # Load last 60 days (2 months) on startup
+WIN_OUTLOOK_WATCH_SENT=True    # Also watch sent emails (True/False)
+```
+
+Refer to `mydata/settings.py` for a complete list of configurable variables and their default values.
+
+### Setting Passphrase via Environment Variable
+
+To avoid typing the master passphrase every time (e.g., for automated daemon restarts):
+
+Windows:
+```powershell
+$env:MYDATA_PASSPHRASE = "your_secret_passphrase"
+```
+
+Linux/macOS:
+```bash
+export MYDATA_PASSPHRASE="your_secret_passphrase"
+```
+
+**Warning:** Only set `MYDATA_PASSPHRASE` on secure, personal machines where it cannot be easily accessed by others.
 
 ## 🔒 Security Notes
 
@@ -109,154 +148,3 @@ mydata daemon
 - **100% local** - nothing leaves your machine
 - **Zero API costs** - all ML runs on-device
 - **Encrypted at rest** - no plaintext on disk
-
-### Setting Passphrase via Environment Variable
-
-To avoid typing passphrase every time:
-
-Windows:
-```powershell
-$env:MYDATA_PASSPHRASE = "your-passphrase"
-```
-
-Linux/macOS:
-```bash
-export MYDATA_PASSPHRASE="your-passphrase"
-```
-
-**Warning:** Only do this on secure, personal machines.
-
-## 📊 Understanding the System
-
-### Data Flow
-
-```
-Your Data
-    ↓
-┌─────────────────────────────────────┐
-│  File Watcher / Email / Paste       │
-│  (Automatic ingestion)              │
-└─────────────┬───────────────────────┘
-              ↓
-┌─────────────────────────────────────┐
-│  Encryption Layer                   │
-│  (Everything encrypted at rest)     │
-└─────────────┬───────────────────────┘
-              ↓
-┌─────────────────────────────────────┐
-│  Text Chunking                      │
-│  (512 token chunks with overlap)    │
-└─────────────┬───────────────────────┘
-              ↓
-┌─────────────────────────────────────┐
-│  ML Embeddings (bge-small)          │
-│  (384-dim vectors, on-device)       │
-└─────────────┬───────────────────────┘
-              ↓
-┌─────────────┬───────────────────────┐
-│   SQLite    │   Qdrant (Vectors)    │
-│  (Metadata) │   (Semantic search)   │
-└─────────────┴───────────────────────┘
-              ↓
-┌─────────────────────────────────────┐
-│  ML Organizer (Background)          │
-│  - Auto-tagging                     │
-│  - Clustering (HDBSCAN)             │
-│  - Pattern detection                │
-└─────────────────────────────────────┘
-```
-
-### Where is Data Stored?
-
-All data lives in: `~/.mydata/` (or `C:\Users\YourName\.mydata\` on Windows)
-
-```
-~/.mydata/
-├── master.key              # Encrypted master key
-├── salt.bin               # Encryption salt
-├── mydata.db              # SQLite database (metadata)
-├── qdrant/                # Vector database
-├── storage/
-│   ├── files/             # Encrypted original files
-│   └── embeddings/        # Encrypted embeddings (backup)
-└── models/                # Downloaded ML models (cached)
-```
-
-## 🎨 Customization
-
-### Watch Different Directories
-
-Edit `mydata/daemon.py` or set environment variable:
-
-```bash
-export WATCH_DIRECTORIES="~/Documents,~/Projects,~/Downloads"
-```
-
-### Adjust ML Frequency
-
-Edit `mydata/daemon.py`, change `time.sleep(300)` to your preferred interval.
-
-## 🆘 Troubleshooting
-
-### "Module not found" errors
-
-```bash
-pip install -e .
-```
-
-### Forgot passphrase?
-
-Unfortunately, there's no recovery. Delete `~/.mydata/` and start fresh with `mydata setup`.
-
-### Slow embeddings?
-
-First run downloads the model (~33 MB). Subsequent runs are fast. CPU-only is fine for small batches.
-
-### Permission errors (Linux/macOS)
-
-```bash
-chmod 600 ~/.mydata/master.key
-chmod 600 ~/.mydata/salt.bin
-```
-
-## 🚀 Advanced Usage
-
-### API Server Mode
-
-```bash
-# Start FastAPI server
-uvicorn mydata.api:app --host 0.0.0.0 --port 8000
-
-# API endpoints available at http://localhost:8000
-# Docs: http://localhost:8000/docs
-```
-
-### Docker Deployment
-
-```bash
-# Build and run
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Stop
-docker-compose down
-```
-
-## 📈 Performance Tips
-
-- **SSD recommended** for Qdrant vector search
-- **16 GB RAM** comfortable for 500k documents
-- **First embedding** downloads model (~1 min), then cached
-- **Search latency** < 100ms for most queries
-
-## 🎓 Next Steps
-
-1. Run `mydata daemon` in a terminal and leave it running
-2. Drop files into your watch directories
-3. Paste important text: `echo "..." | mydata add --stdin`
-4. Search anytime: `mydata ask "your query"`
-5. Check stats: `mydata stats`
-
-Enjoy **God Mode**! 🚀
