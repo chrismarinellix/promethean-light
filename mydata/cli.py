@@ -391,5 +391,128 @@ def email_add(
     console.print("[dim]Run 'mydata daemon' to start watching inbox[/dim]")
 
 
+@app.command()
+def quick():
+    """Quick access menu for common queries and summaries"""
+    from .client import Client
+    import requests
+    import json
+
+    client = Client()
+
+    # Check if daemon is running
+    if not client.is_alive():
+        console.print("[red]✗[/red] Daemon not running. Start it with: START.bat")
+        raise typer.Exit(1)
+
+    # Define quick access items
+    items = [
+        {"key": "1", "name": "India Staff", "type": "summary", "query": "india_staff"},
+        {"key": "2", "name": "Australia Staff", "type": "summary", "query": "australia_staff"},
+        {"key": "3", "name": "Retention Bonuses", "type": "summary", "query": "retention_bonuses"},
+        {"key": "4", "name": "Search: Salary Info", "type": "search", "query": "salary information"},
+        {"key": "5", "name": "Search: Pipeline", "type": "search", "query": "pipeline"},
+        {"key": "6", "name": "Search: Urgent Items", "type": "search", "query": "urgent"},
+        {"key": "7", "name": "Recent Documents", "type": "list", "query": None},
+    ]
+
+    # Display menu
+    console.print("\n[bold cyan]Quick Access Menu[/bold cyan]\n")
+
+    table = Table(show_header=True, header_style="bold magenta")
+    table.add_column("#", style="cyan", width=4)
+    table.add_column("Query", style="white", width=30)
+    table.add_column("Type", style="green", width=12)
+
+    for item in items:
+        table.add_row(item["key"], item["name"], item["type"])
+
+    console.print(table)
+    console.print("\n[dim]Enter number (or 'q' to quit):[/dim] ", end="")
+
+    choice = input().strip()
+
+    if choice.lower() == 'q':
+        return
+
+    # Find selected item
+    selected = next((item for item in items if item["key"] == choice), None)
+
+    if not selected:
+        console.print("[yellow]Invalid selection[/yellow]")
+        return
+
+    console.print(f"\n[cyan]Loading: {selected['name']}...[/cyan]\n")
+
+    try:
+        if selected["type"] == "summary":
+            # Fetch pre-computed summary
+            response = requests.get(f"http://localhost:8000/summary/{selected['query']}")
+            response.raise_for_status()
+            data = response.json()
+
+            # Pretty print JSON
+            console.print(Panel(
+                json.dumps(data, indent=2),
+                title=f"[bold]{selected['name']}[/bold]",
+                border_style="green"
+            ))
+
+        elif selected["type"] == "search":
+            # Execute search
+            results = client.search(selected["query"], limit=10)
+
+            if not results:
+                console.print("[yellow]No results found[/yellow]")
+                return
+
+            # Display results table
+            result_table = Table(title=f"Search Results: '{selected['query']}'")
+            result_table.add_column("Score", style="cyan", width=8)
+            result_table.add_column("Source", style="magenta", width=30)
+            result_table.add_column("Preview", style="white", width=60)
+
+            for hit in results:
+                score = f"{hit['score']:.3f}"
+                source = hit.get("source", "unknown")
+                text = hit.get("text", "")[:100]
+                result_table.add_row(score, source, text)
+
+            console.print(result_table)
+
+        elif selected["type"] == "list":
+            # Show recent documents
+            crypto = get_crypto()
+            crypto.unlock()
+            db = Database()
+            session = db.session()
+
+            stmt = select(Document).limit(15)
+            docs = session.exec(stmt).all()
+
+            if not docs:
+                console.print("[yellow]No documents found[/yellow]")
+                return
+
+            doc_table = Table(title="Recent Documents")
+            doc_table.add_column("ID", style="cyan", width=12)
+            doc_table.add_column("Source", style="magenta", width=30)
+            doc_table.add_column("Preview", style="white", width=50)
+            doc_table.add_column("Created", style="green", width=20)
+
+            for doc in docs:
+                doc_id = str(doc.id)[:8]
+                source = doc.source[:28] + "..." if len(doc.source) > 30 else doc.source
+                preview = doc.raw_text[:47] + "..." if len(doc.raw_text) > 50 else doc.raw_text
+                created = doc.created_at.strftime("%Y-%m-%d %H:%M")
+                doc_table.add_row(doc_id, source, preview, created)
+
+            console.print(doc_table)
+
+    except Exception as e:
+        console.print(f"[red]✗[/red] Error: {e}")
+        raise typer.Exit(1)
+
+
 if __name__ == "__main__":
     app()

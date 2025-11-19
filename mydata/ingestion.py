@@ -104,13 +104,16 @@ class IngestionPipeline:
 
     def ingest_email(self, email_data: dict) -> Optional[UUID]:
         """Ingest an email"""
+        from datetime import datetime
+
+        timestamp = datetime.now().strftime("%H:%M:%S")
         text = email_data["full_text"]
         source = f"email://{email_data.get('sender', 'unknown')}/{email_data.get('uid', 'unknown')}"
 
         # Check for semantic duplicates (emails can be forwarded/duplicated)
         if self._is_semantic_duplicate(text, threshold=0.98):
-            subject = email_data.get("subject", "(no subject)")[:30]
-            print(f"⚠ Duplicate email skipped: {subject}...")
+            subject = email_data.get("subject", "(no subject)")[:40]
+            print(f"⚠ [{timestamp}] Duplicate email skipped: {subject}...")
             return None
 
         # Create document
@@ -125,13 +128,18 @@ class IngestionPipeline:
         self.db.refresh(doc)
 
         # Process chunks and embeddings
-        self._process_document(doc, text)
+        chunk_count = self._process_document(doc, text)
 
         subject = email_data.get("subject", "(no subject)")[:50]
-        print(f"✓ Ingested email: {subject}... (ID: {str(doc.id)[:8]}...)")
+        sender = email_data.get("sender", "unknown")[:30]
+        print(f"✓ [{timestamp}] Email ingested: '{subject}'")
+        print(f"   • From: {sender}")
+        print(f"   • Document ID: {str(doc.id)[:8]}...")
+        print(f"   • Chunks created: {chunk_count}")
+        print(f"   • Size: {len(text)} chars")
         return doc.id
 
-    def _process_document(self, doc: Document, text: str) -> None:
+    def _process_document(self, doc: Document, text: str) -> int:
         """Process document: chunk, embed, and organize"""
         # Simple chunking (split by paragraphs or fixed size)
         chunks = self._chunk_text(text, max_length=512)
@@ -172,6 +180,8 @@ class IngestionPipeline:
         # Run ML organization
         if self.ml_organizer:
             self.ml_organizer.organize_document(str(doc.id), text)
+
+        return len(chunks)
 
     def _chunk_text(self, text: str, max_length: int = 512) -> List[str]:
         """Simple text chunking"""

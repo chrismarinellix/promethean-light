@@ -2,6 +2,8 @@
 
 import time
 import threading
+import json
+from pathlib import Path
 from typing import Callable, Dict, Optional
 from datetime import datetime, timedelta
 
@@ -15,6 +17,7 @@ class OutlookWatcher:
         poll_interval: int = 60,
         history_hours: int = 24,  # How far back to load on first run
         watch_sent: bool = True,  # Also watch sent items
+        state_file: Optional[Path] = None,  # Where to persist state
     ):
         self.on_email_received = on_email_received
         self.poll_interval = poll_interval
@@ -25,6 +28,16 @@ class OutlookWatcher:
         self._inbox = None
         self._sent_items = None
         self._seen_ids = set()
+        self._last_processed_time = None
+
+        # State file for persistence
+        if state_file is None:
+            state_file = Path.home() / ".mydata" / "outlook_state.json"
+        self.state_file = state_file
+        self.state_file.parent.mkdir(parents=True, exist_ok=True)
+
+        # Load previous state
+        self._load_state()
 
     def connect(self) -> bool:
         """Connect to local Outlook"""
@@ -70,18 +83,34 @@ class OutlookWatcher:
 
     def _check_new_emails(self) -> None:
         """Check for new emails in inbox and sent items"""
+        from datetime import datetime
+
+        check_time = datetime.now().strftime("%H:%M:%S")
         new_count = 0
+        inbox_count = 0
+        sent_count = 0
 
         # Process inbox
         if self._inbox:
-            new_count += self._process_folder(self._inbox, "inbox")
+            inbox_count = self._process_folder(self._inbox, "inbox")
+            new_count += inbox_count
 
         # Process sent items
         if self.watch_sent and self._sent_items:
-            new_count += self._process_folder(self._sent_items, "sent")
+            sent_count = self._process_folder(self._sent_items, "sent")
+            new_count += sent_count
 
         if new_count > 0:
-            print(f"📧 Processed {new_count} new email(s) from Outlook")
+            print(f"📧 [{check_time}] Processed {new_count} new email(s) from Outlook")
+            if inbox_count > 0:
+                print(f"   • Inbox: {inbox_count} new")
+            if sent_count > 0:
+                print(f"   • Sent: {sent_count} new")
+            if self._last_processed_time:
+                print(f"   • Last sync: {self._last_processed_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"   • Total tracked: {len(self._seen_ids)} emails")
+            # Save state after processing new emails
+            self._save_state()
 
     def _process_folder(self, folder, folder_name: str) -> int:
         """Process emails from a specific folder"""
@@ -114,14 +143,21 @@ class OutlookWatcher:
                         # Parse if string
                         continue
 
-                    # Only process recent emails (configurable history)
+                    # Only process recent emails
                     # Make datetime timezone-naive for comparison
                     now = datetime.now()
                     if hasattr(received_time, 'replace'):
                         received_time_naive = received_time.replace(tzinfo=None)
-                        time_diff = now - received_time_naive
-                        if time_diff > timedelta(hours=self.history_hours):
-                            continue
+
+                        # If we have a last processed time, only process emails after it
+                        if self._last_processed_time is not None:
+                            if received_time_naive <= self._last_processed_time:
+                                continue  # Skip already processed emails
+                        else:
+                            # First run - use history_hours
+                            time_diff = now - received_time_naive
+                            if time_diff > timedelta(hours=self.history_hours):
+                                continue
 
                     self._seen_ids.add(entry_id)
 
@@ -131,6 +167,12 @@ class OutlookWatcher:
                     if email_data:
                         new_count += 1
                         self.on_email_received(email_data)
+
+                        # Update last processed time
+                        if hasattr(received_time, 'replace'):
+                            received_time_naive = received_time.replace(tzinfo=None)
+                            if self._last_processed_time is None or received_time_naive > self._last_processed_time:
+                                self._last_processed_time = received_time_naive
 
                 except Exception as e:
                     print(f"Error processing {folder_name} email {i}: {e}")
@@ -171,3 +213,34 @@ class OutlookWatcher:
     def is_running(self) -> bool:
         """Check if watcher is running"""
         return self._running
+
+    def _load_state(self) -> None:
+        """Load previous state from disk"""
+        if not self.state_file.exists():
+            print("  No previous state found - will load initial history")
+            return
+
+        try:
+            with open(self.state_file, 'r') as f:
+                state = json.load(f)
+
+            # Load last processed timestamp
+            if 'last_processed_time' in state:
+                self._last_processed_time = datetime.fromisoformat(state['last_processed_time'])
+                print(f"  Resuming from: {self._last_processed_time.strftime('%Y-%m-%d %H:%M:%S')}")
+
+        except Exception as e:
+            print(f"  Warning: Could not load state: {e}")
+
+    def _save_state(self) -> None:
+        """Save current state to disk"""
+        try:
+            state = {
+                'last_processed_time': self._last_processed_time.isoformat() if self._last_processed_time else None,
+            }
+
+            with open(self.state_file, 'w') as f:
+                json.dump(state, f, indent=2)
+
+        except Exception as e:
+            print(f"  Warning: Could not save state: {e}")

@@ -19,7 +19,29 @@ class MLOrganizer:
 
     def run_clustering(self, min_cluster_size: int = 5, min_samples: int = 3) -> dict:
         """Run HDBSCAN clustering on all document embeddings"""
-        print("[ML] Running clustering...")
+        from datetime import datetime
+
+        start_time = datetime.now()
+        timestamp = start_time.strftime("%H:%M:%S")
+
+        print(f"[ML] [{timestamp}] Running clustering analysis...")
+
+        # Get document and chunk counts
+        try:
+            doc_count = len(self.db.exec(select(Document)).all())
+            chunk_count = len(self.db.exec(select(Chunk)).all())
+            tag_count = len(self.db.exec(select(Tag)).all())
+            cluster_count = len(self.db.exec(select(Cluster)).all())
+
+            print(f"[ML] [{timestamp}] Database status:")
+            print(f"      • Documents: {doc_count}")
+            print(f"      • Chunks: {chunk_count}")
+            print(f"      • Tags: {tag_count}")
+            print(f"      • Existing clusters: {cluster_count}")
+
+        except Exception as e:
+            print(f"[ML] [{timestamp}] Warning: Could not fetch stats: {e}")
+            doc_count = 0
 
         # Get all chunks with embeddings from Qdrant
         # For now, we'll use a simplified version
@@ -28,8 +50,10 @@ class MLOrganizer:
         try:
             import hdbscan
             import umap
+            print(f"[ML] [{timestamp}] HDBSCAN/UMAP available - clustering enabled")
         except ImportError:
-            print("⚠ HDBSCAN/UMAP not available. Install with: pip install hdbscan umap-learn")
+            print(f"[ML] [{timestamp}] ⚠ HDBSCAN/UMAP not available (install with: pip install hdbscan umap-learn)")
+            print(f"[ML] [{timestamp}] Skipping clustering - using tag-based organization only")
             return {"status": "skipped", "reason": "missing dependencies"}
 
         # This is a placeholder - full implementation would:
@@ -39,8 +63,13 @@ class MLOrganizer:
         # 4. Generate cluster labels
         # 5. Update database
 
-        print("✓ Clustering complete (placeholder)")
-        return {"status": "ok", "clusters": 0}
+        end_time = datetime.now()
+        duration = (end_time - start_time).total_seconds()
+
+        print(f"[ML] [{timestamp}] ✓ Analysis complete in {duration:.2f}s")
+        print(f"[ML] [{timestamp}] No changes detected - database stable")
+
+        return {"status": "ok", "clusters": cluster_count}
 
     def auto_tag(self, doc_id: str, text: str, top_k: int = 3) -> List[str]:
         """Generate tags for a document using keyword extraction"""

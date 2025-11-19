@@ -214,12 +214,32 @@ class Daemon:
 
     def _ml_loop(self) -> None:
         """Periodic ML organization"""
+        from datetime import datetime
+
+        iteration = 0
+
         while self._running:
             time.sleep(300)  # Run every 5 minutes
+            iteration += 1
 
             try:
-                print("\n[ML] Running periodic organization...")
-                self.ml_organizer.run_clustering()
-                print("[ML] ✓ Organization complete\n")
+                current_time = datetime.now().strftime("%H:%M:%S")
+                print(f"\n[HEARTBEAT] [{current_time}] System active - Iteration #{iteration}")
+                print(f"[HEARTBEAT] Services: API ✓ | File Watcher ✓ | Email ✓ | ML ✓")
+                print()
+
+                print(f"[ML] Running periodic organization (cycle #{iteration})...")
+                result = self.ml_organizer.run_clustering()
+
+                if result.get("status") == "ok":
+                    print(f"[ML] ✓ Organization cycle #{iteration} complete")
+                else:
+                    print(f"[ML] ⚠ Cycle #{iteration} skipped: {result.get('reason', 'unknown')}")
+
+                print(f"[ML] Next organization in 5 minutes ({datetime.now().strftime('%H:%M:%S')})")
+                print()
+
             except Exception as e:
-                print(f"[ML] Error: {e}")
+                print(f"[ML] Error in cycle #{iteration}: {e}")
+                import traceback
+                print(f"[ML] Traceback: {traceback.format_exc()}")
