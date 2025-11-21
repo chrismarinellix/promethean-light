@@ -1,6 +1,6 @@
 """Pre-computed summaries for common queries - Ultra fast, 0 tokens"""
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 
 def get_india_staff_summary() -> Dict:
@@ -100,10 +100,10 @@ def get_australia_staff_summary() -> Dict:
         "staff": [
             {"id": "470408", "name": "Chris Marinelli", "position": "Operations Director", "salary": "$260,000"},
             {"id": "435865", "name": "Anthony Morton", "position": "Global Tech Head", "salary": "$250,000"},
-            {"id": "435867", "name": "Robby Palackal", "position": "Team Lead", "salary": "$230,000", "retention_bonus": "10%", "total": "$253,000", "expires": "Feb 2026"},
-            {"id": "470162", "name": "Naveenkumar Rajagopal", "position": "Principal Engineer", "salary": "$220,000", "retention_bonus": "10%", "total": "$242,000", "expires": "Feb 2026"},
+            {"id": "435867", "name": "Robby Palackal", "position": "Team Lead [RESIGNED]", "salary": "$230,000", "retention_bonus": "10%", "total": "$253,000", "expires": "Feb 2026"},
+            {"id": "470162", "name": "Naveenkumar Rajagopal", "position": "Principal Engineer", "salary": "$230,000", "retention_bonus": "10%", "total": "$253,000", "expires": "Feb 2026"},
             {"id": "450639", "name": "Eduardo Jr Laygo", "position": "Lead Engineer", "salary": "$193,000", "retention_bonus": "10%", "total": "$212,300", "expires": "Feb 2026"},
-            {"id": "459865", "name": "Ajith Tennakoon", "position": "Lead Engineer", "salary": "$185,000", "retention_bonus": "None"},
+            {"id": "459865", "name": "Ajith Tennakoon", "position": "Lead Engineer", "salary": "$220,000", "retention_bonus": "10%", "total": "$242,000", "expires": "Aug 2026"},
             {"id": "470305", "name": "Md Rahman", "position": "Senior Engineer", "salary": "$175,000", "retention_bonus": "10%", "total": "$192,500", "expires": "Aug 2026"},
             {"id": "470479", "name": "Zabir Uddin Hussainy Syed", "position": "Lead Engineer", "salary": "$170,000", "retention_bonus": "10%", "total": "$187,000", "expires": "Aug 2026"},
             {"id": "470443", "name": "Komal Gaikwad", "position": "Senior Engineer", "salary": "$160,000"},
@@ -113,29 +113,31 @@ def get_australia_staff_summary() -> Dict:
             {"id": "470116", "name": "Parthena Savvidis", "position": "Administrator", "salary": "$49,000"}
         ],
         "total_count": 13,
-        "with_retention_bonus": 5,
+        "with_retention_bonus": 6,
         "retention_bonus_expires_feb_2026": 3,
-        "retention_bonus_expires_aug_2026": 2
+        "retention_bonus_expires_aug_2026": 3,
+        "notes": "Ajith raised to $220K + 10% bonus. Naveen raised to $230K. Robby resigned."
     }
 
 
 def get_retention_bonus_summary() -> Dict:
     """Pre-computed retention bonus summary"""
     return {
-        "total_staff_with_bonuses": 8,
+        "total_staff_with_bonuses": 9,
         "expires_feb_2026": [
-            {"name": "Robby Palackal", "bonus": "10%", "amount_aud": "$23,000"},
-            {"name": "Naveen Rajagopal", "bonus": "10%", "amount_aud": "$22,000"},
+            {"name": "Robby Palackal [RESIGNED]", "bonus": "10%", "amount_aud": "$23,000"},
+            {"name": "Naveen Rajagopal", "bonus": "10%", "amount_aud": "$23,000"},
             {"name": "Eduardo Laygo", "bonus": "10%", "amount_aud": "$19,300"}
         ],
         "expires_aug_2026": [
+            {"name": "Ajith Tennakoon", "bonus": "10%", "amount_aud": "$22,000"},
             {"name": "Md Rahman", "bonus": "10%", "amount_aud": "$17,500"},
             {"name": "Zabir Uddin", "bonus": "10%", "amount_aud": "$17,000"},
             {"name": "Amani (Malaysia)", "bonus": "10%", "amount_myr": "26K MYR"},
-            {"name": "Faraz Khan (India)", "bonus": "10%", "amount_inr": "₹800K"},
-            {"name": "Owais Raja (India)", "bonus": "10%", "amount_inr": "₹250K"}
+            {"name": "Faraz Khan (India)", "bonus": "10%", "amount_inr": "800K INR"},
+            {"name": "Owais Raja (India)", "bonus": "10%", "amount_inr": "250K INR"}
         ],
-        "total_annual_cost_aud": "$126,000"
+        "total_annual_cost_aud": "$148,000"
     }
 
 

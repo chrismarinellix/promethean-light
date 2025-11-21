@@ -1,22 +1,26 @@
-"""Simple in-memory cache for API responses"""
+"""Simple in-memory cache for API responses with LRU eviction"""
 
 import time
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, OrderedDict
 from functools import wraps
+from collections import OrderedDict
 
 
 class SimpleCache:
-    """Simple TTL-based cache"""
+    """TTL-based cache with LRU eviction and max size"""
 
-    def __init__(self, ttl_seconds: int = 300):
-        self.cache: Dict[str, Dict] = {}
+    def __init__(self, ttl_seconds: int = 300, max_size: int = 1000):
+        self.cache: OrderedDict[str, Dict] = OrderedDict()
         self.ttl = ttl_seconds
+        self.max_size = max_size
 
     def get(self, key: str) -> Optional[Any]:
-        """Get cached value if not expired"""
+        """Get cached value if not expired (LRU: move to end)"""
         if key in self.cache:
             entry = self.cache[key]
             if time.time() - entry['timestamp'] < self.ttl:
+                # Move to end (most recently used)
+                self.cache.move_to_end(key)
                 return entry['value']
             else:
                 # Expired, remove it
@@ -24,11 +28,20 @@ class SimpleCache:
         return None
 
     def set(self, key: str, value: Any) -> None:
-        """Set cache value"""
+        """Set cache value with LRU eviction"""
+        # Remove if exists (to update position)
+        if key in self.cache:
+            del self.cache[key]
+
+        # Add new entry
         self.cache[key] = {
             'value': value,
             'timestamp': time.time()
         }
+
+        # Evict oldest if over max size (FIFO/LRU)
+        while len(self.cache) > self.max_size:
+            self.cache.popitem(last=False)  # Remove oldest (first item)
 
     def clear(self) -> None:
         """Clear all cache"""
@@ -38,6 +51,10 @@ class SimpleCache:
         """Invalidate specific key"""
         if key in self.cache:
             del self.cache[key]
+
+    def size(self) -> int:
+        """Get current cache size"""
+        return len(self.cache)
 
 
 # Global cache instance

@@ -53,10 +53,17 @@ def print_banner(style: str = "full"):
 
     console = Console()
 
-    if style == "simple":
-        console.print(SIMPLE_BANNER, style="bold cyan")
-    else:
-        console.print(BANNER, style="bold cyan")
-        console.print(TAGLINE, style="bold green")
+    try:
+        if style == "simple":
+            console.print(SIMPLE_BANNER, style="bold cyan")
+        else:
+            console.print(BANNER, style="bold cyan")
+            console.print(TAGLINE, style="bold green")
 
-    console.print()
+        console.print()
+    except (UnicodeEncodeError, Exception):
+        # Fallback for terminals that can't handle unicode
+        print("\n" + "="*60)
+        print("  PROMETHEAN LIGHT - GOD MODE")
+        print("  [ENCRYPTED - LOCAL - ML-POWERED DATABASE]")
+        print("="*60 + "\n")

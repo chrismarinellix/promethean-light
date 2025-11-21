@@ -9,7 +9,7 @@ import numpy as np
 class Embedder:
     """Generates embeddings using local models"""
 
-    def __init__(self, model_name: str = "BAAI/bge-base-en-v1.5", cache_dir: Optional[Path] = None):
+    def __init__(self, model_name: str = "BAAI/bge-large-en-v1.5", cache_dir: Optional[Path] = None):
         self.model_name = model_name
         self.cache_dir = cache_dir or Path.home() / ".mydata" / "models"
         self.cache_dir.mkdir(parents=True, exist_ok=True)

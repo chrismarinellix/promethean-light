@@ -23,7 +23,7 @@ class VectorDB:
         self.collection_name = collection_name
         self._initialized = False
 
-    def initialize(self, dimension: int = 384) -> None:
+    def initialize(self, dimension: int = 4096) -> None:
         """Initialize collection if it doesn't exist"""
         if self._initialized:
             return

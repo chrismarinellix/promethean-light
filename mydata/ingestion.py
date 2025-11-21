@@ -31,7 +31,7 @@ class IngestionPipeline:
         self.ml_organizer = ml_organizer
 
     def ingest_file(self, file_path: Path) -> Optional[UUID]:
-        """Ingest a file"""
+        """Ingest a file (supports TXT, PDF, DOCX, XLSX, CSV, JSON, MD)"""
         if not file_path.exists():
             print(f"✗ File not found: {file_path}")
             return None
@@ -43,11 +43,14 @@ class IngestionPipeline:
             print(f"✗ Error reading file: {e}")
             return None
 
-        # Extract text (basic version - extend with textract for PDFs, etc.)
-        try:
-            text = content.decode("utf-8")
-        except UnicodeDecodeError:
-            print(f"⚠ Skipping binary file: {file_path.name}")
+        # Extract text based on file type
+        text = self._extract_text_from_file(file_path, content)
+        if text is None:
+            print(f"⚠ Skipping unsupported file: {file_path.name}")
+            return None
+
+        if not text.strip():
+            print(f"⚠ Skipping empty file: {file_path.name}")
             return None
 
         # Compute hash for deduplication
@@ -59,6 +62,10 @@ class IngestionPipeline:
             print(f"⚠ File already indexed: {file_path.name}")
             return existing.id
 
+        # Extract file metadata for change tracking
+        from .file_metadata import get_file_metadata
+        metadata = get_file_metadata(file_path)
+
         # Create document
         doc = Document(
             source=f"file://{file_path}",
@@ -66,6 +73,10 @@ class IngestionPipeline:
             mime_type=self._detect_mime_type(file_path),
             file_hash=file_hash,
             raw_text=text,
+            file_modified_at=metadata.get('modified_at'),
+            file_created_at=metadata.get('created_at'),
+            file_size_bytes=metadata.get('size_bytes'),
+            file_owner=metadata.get('owner'),
         )
 
         self.db.add(doc)
@@ -226,6 +237,128 @@ class IngestionPipeline:
             print(f"⚠ Semantic dedup check failed: {e}")
             return False
 
+    def _extract_text_from_file(self, file_path: Path, content: bytes) -> Optional[str]:
+        """
+        Extract text from various file types.
+
+        🔒 READ-ONLY OPERATION - This method ONLY reads files, never modifies them.
+
+        Supported formats:
+        - Text: .txt, .md, .csv, .json, .log
+        - PDF: .pdf (using pypdf)
+        - Word: .docx (using python-docx)
+        - Excel: .xlsx, .xls (using openpyxl)
+
+        Returns:
+            Extracted text or None if unsupported/error
+        """
+        suffix = file_path.suffix.lower()
+
+        try:
+            # Plain text files
+            if suffix in ['.txt', '.md', '.csv', '.json', '.log']:
+                try:
+                    return content.decode('utf-8')
+                except UnicodeDecodeError:
+                    # Try with different encoding
+                    try:
+                        return content.decode('latin-1')
+                    except Exception:
+                        return None
+
+            # PDF files
+            elif suffix == '.pdf':
+                try:
+                    from pypdf import PdfReader
+                    from io import BytesIO
+
+                    pdf_file = BytesIO(content)
+                    reader = PdfReader(pdf_file)
+
+                    text_parts = []
+                    for page_num, page in enumerate(reader.pages):
+                        try:
+                            page_text = page.extract_text()
+                            if page_text:
+                                text_parts.append(page_text)
+                        except Exception as e:
+                            print(f"⚠ Error extracting page {page_num + 1}: {e}")
+                            continue
+
+                    if text_parts:
+                        return '\n\n'.join(text_parts)
+                    else:
+                        print(f"⚠ No text extracted from PDF (may be scanned/image-based)")
+                        return None
+
+                except Exception as e:
+                    print(f"⚠ PDF extraction failed: {e}")
+                    return None
+
+            # Word documents (.docx)
+            elif suffix == '.docx':
+                try:
+                    from docx import Document as DocxDocument
+                    from io import BytesIO
+
+                    docx_file = BytesIO(content)
+                    doc = DocxDocument(docx_file)
+
+                    # Extract paragraphs
+                    paragraphs = [para.text for para in doc.paragraphs if para.text.strip()]
+
+                    # Extract tables
+                    table_texts = []
+                    for table in doc.tables:
+                        for row in table.rows:
+                            row_text = '\t'.join([cell.text for cell in row.cells])
+                            if row_text.strip():
+                                table_texts.append(row_text)
+
+                    all_text = '\n\n'.join(paragraphs)
+                    if table_texts:
+                        all_text += '\n\n' + '\n'.join(table_texts)
+
+                    return all_text if all_text.strip() else None
+
+                except Exception as e:
+                    print(f"⚠ DOCX extraction failed: {e}")
+                    return None
+
+            # Excel files (.xlsx, .xls)
+            elif suffix in ['.xlsx', '.xls']:
+                try:
+                    from openpyxl import load_workbook
+                    from io import BytesIO
+
+                    excel_file = BytesIO(content)
+                    wb = load_workbook(excel_file, data_only=True, read_only=True)
+
+                    text_parts = []
+                    for sheet_name in wb.sheetnames:
+                        sheet = wb[sheet_name]
+                        text_parts.append(f"=== Sheet: {sheet_name} ===")
+
+                        for row in sheet.iter_rows(values_only=True):
+                            row_text = '\t'.join([str(cell) if cell is not None else '' for cell in row])
+                            if row_text.strip():
+                                text_parts.append(row_text)
+
+                    wb.close()
+                    return '\n'.join(text_parts) if text_parts else None
+
+                except Exception as e:
+                    print(f"⚠ Excel extraction failed: {e}")
+                    return None
+
+            # Unsupported file type
+            else:
+                return None
+
+        except Exception as e:
+            print(f"⚠ Unexpected error extracting {file_path.name}: {e}")
+            return None
+
     def _detect_mime_type(self, file_path: Path) -> str:
         """Detect MIME type from file extension"""
         suffix = file_path.suffix.lower()
@@ -233,7 +366,11 @@ class IngestionPipeline:
             ".txt": "text/plain",
             ".md": "text/markdown",
             ".pdf": "application/pdf",
+            ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".xls": "application/vnd.ms-excel",
             ".json": "application/json",
             ".csv": "text/csv",
+            ".log": "text/plain",
         }
         return mime_types.get(suffix, "application/octet-stream")

@@ -20,41 +20,75 @@ class MLOrganizer:
     def run_clustering(self, min_cluster_size: int = 5, min_samples: int = 3) -> dict:
         """Run HDBSCAN clustering on all document embeddings"""
         from datetime import datetime
+        from sqlalchemy import func
 
         start_time = datetime.now()
         timestamp = start_time.strftime("%H:%M:%S")
 
-        print(f"[ML] [{timestamp}] Running clustering analysis...")
-
-        # Get document and chunk counts
+        # Get document and chunk counts - OPTIMIZED with COUNT
         try:
-            doc_count = len(self.db.exec(select(Document)).all())
-            chunk_count = len(self.db.exec(select(Chunk)).all())
-            tag_count = len(self.db.exec(select(Tag)).all())
-            cluster_count = len(self.db.exec(select(Cluster)).all())
+            doc_count = self.db.scalar(select(func.count(Document.id)))
+            chunk_count = self.db.scalar(select(func.count(Chunk.id)))
+            tag_count = self.db.scalar(select(func.count(Tag.id)))
+            cluster_count = self.db.scalar(select(func.count(Cluster.id)))
 
-            print(f"[ML] [{timestamp}] Database status:")
-            print(f"      • Documents: {doc_count}")
-            print(f"      • Chunks: {chunk_count}")
-            print(f"      • Tags: {tag_count}")
-            print(f"      • Existing clusters: {cluster_count}")
+            # Track if there are changes since last run
+            if not hasattr(self, '_last_doc_count'):
+                self._last_doc_count = doc_count
+                self._last_chunk_count = chunk_count
+                self._last_tag_count = tag_count
+                has_changes = True
+            else:
+                has_changes = (
+                    doc_count != self._last_doc_count or
+                    chunk_count != self._last_chunk_count or
+                    tag_count != self._last_tag_count
+                )
+
+            # Only print details if there are changes
+            if has_changes:
+                print(f"[ML] [{timestamp}] 📊 Database activity detected:")
+
+                if doc_count != self._last_doc_count:
+                    diff = doc_count - self._last_doc_count
+                    print(f"      • Documents: {doc_count} (+{diff})")
+                else:
+                    print(f"      • Documents: {doc_count}")
+
+                if chunk_count != self._last_chunk_count:
+                    diff = chunk_count - self._last_chunk_count
+                    print(f"      • Chunks: {chunk_count} (+{diff})")
+                else:
+                    print(f"      • Chunks: {chunk_count}")
+
+                if tag_count != self._last_tag_count:
+                    diff = tag_count - self._last_tag_count
+                    print(f"      • Tags: {tag_count} (+{diff})")
+                else:
+                    print(f"      • Tags: {tag_count}")
+
+                print(f"      • Clusters: {cluster_count}")
+
+                # Update last counts
+                self._last_doc_count = doc_count
+                self._last_chunk_count = chunk_count
+                self._last_tag_count = tag_count
 
         except Exception as e:
-            print(f"[ML] [{timestamp}] Warning: Could not fetch stats: {e}")
+            print(f"[ML] [{timestamp}] ⚠ Warning: Could not fetch stats: {e}")
             doc_count = 0
+            has_changes = False
 
-        # Get all chunks with embeddings from Qdrant
-        # For now, we'll use a simplified version
-        # In production, this would fetch from Qdrant and run HDBSCAN
-
+        # Check if clustering is available
         try:
             import hdbscan
             import umap
-            print(f"[ML] [{timestamp}] HDBSCAN/UMAP available - clustering enabled")
+            if has_changes:
+                print(f"[ML] [{timestamp}] HDBSCAN/UMAP available - clustering analysis ready")
         except ImportError:
-            print(f"[ML] [{timestamp}] ⚠ HDBSCAN/UMAP not available (install with: pip install hdbscan umap-learn)")
-            print(f"[ML] [{timestamp}] Skipping clustering - using tag-based organization only")
-            return {"status": "skipped", "reason": "missing dependencies"}
+            if has_changes:
+                print(f"[ML] [{timestamp}] ℹ Using tag-based organization (HDBSCAN/UMAP not installed)")
+            return {"status": "skipped", "reason": "missing dependencies", "has_changes": has_changes}
 
         # This is a placeholder - full implementation would:
         # 1. Fetch all embeddings from Qdrant
@@ -66,10 +100,16 @@ class MLOrganizer:
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
 
-        print(f"[ML] [{timestamp}] ✓ Analysis complete in {duration:.2f}s")
-        print(f"[ML] [{timestamp}] No changes detected - database stable")
+        if has_changes:
+            print(f"[ML] [{timestamp}] ✓ Analysis complete in {duration:.2f}s")
 
-        return {"status": "ok", "clusters": cluster_count}
+        return {
+            "status": "ok",
+            "clusters": cluster_count,
+            "has_changes": has_changes,
+            "doc_count": doc_count,
+            "chunk_count": chunk_count
+        }
 
     def auto_tag(self, doc_id: str, text: str, top_k: int = 3) -> List[str]:
         """Generate tags for a document using keyword extraction"""
