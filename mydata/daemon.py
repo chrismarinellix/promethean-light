@@ -5,6 +5,7 @@ import time
 import signal
 import sys
 import platform
+import traceback
 from pathlib import Path
 from typing import Optional, List, Dict
 from .crypto import CryptoManager
@@ -19,6 +20,9 @@ from .email_watcher import EmailWatcher
 from .models import EmailCredential
 from sqlmodel import select
 from .logger import get_logger
+from .hybrid_search import HybridSearcher
+from .anonymizer import Anonymizer
+from .config import Config
 
 logger = get_logger()
 
@@ -68,6 +72,20 @@ class Daemon:
         self.pipeline = IngestionPipeline(
             session, self.storage, self.embedder, self.vectordb, self.ml_organizer
         )
+
+        # Create hybrid searcher for better search quality
+        self.hybrid_searcher = HybridSearcher()
+
+        # Create anonymizer for LLM privacy protection (if enabled)
+        self.anonymizer = None
+        if Config.ENABLE_LLM_ANONYMIZATION:
+            self.anonymizer = Anonymizer(
+                enable_spacy=Config.USE_SPACY_NER,
+                known_clients=Config.KNOWN_CLIENTS,
+                known_projects=Config.KNOWN_PROJECTS,
+                known_employees=Config.KNOWN_EMPLOYEES,
+            )
+            logger.info(f"✓ LLM Anonymization enabled (spaCy: {Config.USE_SPACY_NER})")
 
         self.file_watcher: Optional[FileWatcher] = None
         self.email_watchers: List[EmailWatcher] = []
@@ -122,7 +140,17 @@ class Daemon:
             from .api import app, init_services
 
             # Initialize API with our existing services
-            init_services(self.crypto, self.db, self.storage, self.embedder, self.vectordb, self.pipeline, self._api_startup_event)
+            init_services(
+                self.crypto,
+                self.db,
+                self.storage,
+                self.embedder,
+                self.vectordb,
+                self.pipeline,
+                self.hybrid_searcher,
+                self.anonymizer,
+                self._api_startup_event  # Pass the startup event
+            )
 
             uvicorn.run(app, host=self.settings.api_host, port=self.settings.api_port, log_level="error")
 

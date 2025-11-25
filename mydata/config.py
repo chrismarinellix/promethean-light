@@ -54,6 +54,29 @@ class Config:
     EMAIL_POLL_INTERVAL: int = int(os.getenv("EMAIL_POLL_INTERVAL", "60"))
     EMAIL_HISTORY_HOURS: int = int(os.getenv("EMAIL_HISTORY_HOURS", "1440"))  # 60 days
 
+    # Anonymization (for LLM context protection)
+    ENABLE_LLM_ANONYMIZATION: bool = os.getenv("ENABLE_LLM_ANONYMIZATION", "true").lower() == "true"
+    USE_SPACY_NER: bool = os.getenv("USE_SPACY_NER", "true").lower() == "true"
+    SPACY_MODEL: str = os.getenv("SPACY_MODEL", "en_core_web_sm")
+    KNOWN_CLIENTS: List[str] = [
+        c.strip() for c in os.getenv(
+            "KNOWN_CLIENTS",
+            "Alinta Energy,Origin Energy,AGL,EnergyAustralia"
+        ).split(",") if c.strip()
+    ]
+    KNOWN_PROJECTS: List[str] = [
+        p.strip() for p in os.getenv(
+            "KNOWN_PROJECTS",
+            "Boulder Creek,Dundonnell"
+        ).split(",") if p.strip()
+    ]
+    KNOWN_EMPLOYEES: List[str] = [
+        e.strip() for e in os.getenv(
+            "KNOWN_EMPLOYEES",
+            ""  # Will be populated from email senders
+        ).split(",") if e.strip()
+    ]
+
     # ML Organizer
     ML_POLL_INTERVAL: int = int(os.getenv("ML_POLL_INTERVAL", "300"))  # 5 minutes
     ML_MIN_CLUSTER_SIZE: int = int(os.getenv("ML_MIN_CLUSTER_SIZE", "5"))
