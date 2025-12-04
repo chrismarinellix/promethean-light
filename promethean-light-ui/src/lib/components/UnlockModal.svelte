@@ -14,6 +14,10 @@
     dispatch('unlock', { passphrase });
   }
 
+  function handleRetry() {
+    dispatch('retry');
+  }
+
   function handleKeydown(e) {
     if (e.key === 'Enter') {
       handleSubmit();
@@ -22,6 +26,13 @@
       dispatch('close');
     }
   }
+
+  // Check if error suggests daemon is running but not responding
+  $: showRetryButton = error && (
+    error.includes('not responding') ||
+    error.includes('attempt') ||
+    error.includes('Retry')
+  );
 </script>
 
 {#if visible}
@@ -78,6 +89,17 @@
         <button class="btn-secondary" on:click={() => dispatch('close')} disabled={isStarting}>
           Cancel
         </button>
+        {#if showRetryButton && !isStarting}
+          <button class="btn-retry" on:click={handleRetry}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+              <path d="M3 3v5h5"/>
+              <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+              <path d="M16 21h5v-5"/>
+            </svg>
+            Retry Connection
+          </button>
+        {/if}
         <button class="btn-primary" on:click={handleSubmit} disabled={isStarting || !passphrase.trim()}>
           {#if isStarting}
             <span class="spinner"></span>
@@ -288,6 +310,26 @@
     opacity: 0.6;
     cursor: not-allowed;
     transform: none;
+  }
+
+  .btn-retry {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: rgba(59, 130, 246, 0.15);
+    border: 1px solid #3b82f6;
+    color: #3b82f6;
+  }
+
+  .btn-retry:hover {
+    background: rgba(59, 130, 246, 0.25);
   }
 
   .spinner {

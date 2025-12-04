@@ -293,22 +293,36 @@
     unlockError = '';
 
     try {
-      console.log('Starting daemon...');
+      debugLog('UNLOCK', 'Starting daemon...');
       const result = await startDaemon(passphrase);
-      console.log('Daemon start result:', result);
+      debugLog('UNLOCK', 'Daemon start result:', result);
 
-      // Wait a bit more then check connection
-      await new Promise(r => setTimeout(r, 2000));
-      await refreshStats();
+      // Poll for connection with retries (daemon may take time to load ML models)
+      let connected = false;
+      const maxRetries = 15;  // 15 retries * 2 seconds = 30 seconds max wait
 
-      if ($daemonConnected) {
+      for (let i = 1; i <= maxRetries; i++) {
+        debugLog('UNLOCK', `Connection attempt ${i}/${maxRetries}...`);
+        unlockError = `Starting daemon... (attempt ${i}/${maxRetries})`;
+
+        await new Promise(r => setTimeout(r, 2000));
+        await refreshStats();
+
+        if ($daemonConnected) {
+          connected = true;
+          debugLog('UNLOCK', 'Connected successfully!');
+          break;
+        }
+      }
+
+      if (connected) {
         showUnlockModal = false;
         unlockError = '';
       } else {
-        unlockError = 'Daemon started but connection failed. Try again in a few seconds.';
+        unlockError = 'Daemon started but not responding. Check the daemon terminal window for errors, then click Retry Connection.';
       }
     } catch (e) {
-      console.error('Failed to start daemon:', e);
+      debugLog('UNLOCK', `Failed to start daemon: ${e.message}`);
       unlockError = e.message || 'Failed to start daemon';
     } finally {
       isStartingDaemon = false;
@@ -328,12 +342,21 @@
   }
 
   onMount(async () => {
-    // Check daemon and auto-show unlock modal if not running
+    debugLog('INIT', 'Checking daemon connection on mount...');
+
+    // First check if daemon is already running
     await refreshStats();
-    if (!$daemonConnected) {
+
+    if ($daemonConnected) {
+      debugLog('INIT', 'Daemon already connected!');
+    } else {
+      debugLog('INIT', 'Daemon not connected, showing unlock modal');
       showUnlockModal = true;
     }
+
     loadSavedFolders();
+
+    // Periodic refresh every 30 seconds
     const interval = setInterval(refreshStats, 30000);
     return () => clearInterval(interval);
   });
@@ -675,6 +698,17 @@
   isStarting={isStartingDaemon}
   error={unlockError}
   on:unlock={handleUnlock}
+  on:retry={async () => {
+    debugLog('UNLOCK', 'Manual retry requested...');
+    unlockError = 'Checking connection...';
+    await refreshStats();
+    if ($daemonConnected) {
+      showUnlockModal = false;
+      unlockError = '';
+    } else {
+      unlockError = 'Still not connected. Check daemon terminal for errors.';
+    }
+  }}
   on:close={() => { showUnlockModal = false; unlockError = ''; }}
 />
 
