@@ -1,23 +1,218 @@
 <script>
-  import { activeSection, favorites, stats, tags, daemonConnected, databaseInfo, apiKeysStatus } from '../stores.js';
-  import { removeFavorite, searchQuery, searchResults } from '../stores.js';
-  import { getStats, getTags, checkDaemon, startDaemon, getDatabaseInfo, getApiKeysStatus } from '../api.js';
+  import { activeSection, favorites, stats, tags, clusters, daemonConnected, databaseInfo, apiKeysStatus, chatMessages, savedFolders } from '../stores.js';
+  import { removeFavorite, searchQuery, searchResults, loadSavedFolders, saveToFolder, createFolder, removeFromFolder } from '../stores.js';
+  import { getStats, getTags, checkDaemon, startDaemon, getDatabaseInfo, getApiKeysStatus, getClusters } from '../api.js';
   import { onMount } from 'svelte';
   import UnlockModal from './UnlockModal.svelte';
   import AddNoteModal from './AddNoteModal.svelte';
+  import FileUploadModal from './FileUploadModal.svelte';
+
+  // Debug logger
+  function debugLog(context, message, data = null) {
+    const timestamp = new Date().toISOString().split('T')[1].slice(0, 12);
+    const prefix = `[PL ${timestamp}] [Sidebar:${context}]`;
+    if (data !== null) {
+      console.log(prefix, message, data);
+    } else {
+      console.log(prefix, message);
+    }
+  }
 
   let expandedSections = {
     favorites: true,
-    sources: true
+    sources: true,
+    clusters: true,
+    saved: false
   };
+
+  let expandedFolders = {};
+  let showNewFolderInput = false;
+  let newFolderName = '';
 
   function toggleSection(section) {
     expandedSections[section] = !expandedSections[section];
   }
 
+  function toggleFolder(folderId) {
+    expandedFolders[folderId] = !expandedFolders[folderId];
+    expandedFolders = expandedFolders; // Trigger reactivity
+  }
+
+  function handleAddFolder() {
+    if (newFolderName.trim()) {
+      createFolder(newFolderName.trim());
+      newFolderName = '';
+      showNewFolderInput = false;
+    }
+  }
+
+  function handleFolderKeydown(e) {
+    if (e.key === 'Enter') {
+      handleAddFolder();
+    } else if (e.key === 'Escape') {
+      showNewFolderInput = false;
+      newFolderName = '';
+    }
+  }
+
+  function loadSavedItem(item) {
+    // Load a saved item into the chat
+    chatMessages.set([
+      {
+        role: 'user',
+        content: item.query || 'Saved item',
+        timestamp: item.savedAt
+      },
+      {
+        role: 'assistant',
+        content: item.response || item.content || 'No content',
+        sources: item.sources || [],
+        timestamp: item.savedAt
+      }
+    ]);
+    activeSection.set('chat');
+  }
+
+  function getTotalSavedCount(folders) {
+    return folders.reduce((sum, f) => sum + (f.items?.length || 0), 0);
+  }
+
+  // Click on data source to get a summary
+  async function exploreDataSource(sourceType) {
+    let query = '';
+    switch (sourceType) {
+      case 'emails':
+        query = 'Give me a summary of my recent emails. What are the key themes, who are the main people communicating, and what urgent items need attention?';
+        break;
+      case 'documents':
+        query = 'What documents have been indexed? Give me a summary of the key topics and types of documents in my collection.';
+        break;
+      case 'notes':
+        query = 'What notes and pastes have I saved? Summarize the main topics and any actionable items from my notes.';
+        break;
+      default:
+        return;
+    }
+
+    // Add to chat and trigger search
+    chatMessages.set([
+      {
+        role: 'user',
+        content: query,
+        timestamp: new Date().toISOString()
+      }
+    ]);
+
+    activeSection.set('chat');
+
+    // Make the API call
+    try {
+      const response = await fetch('http://127.0.0.1:8000/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: query })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        chatMessages.update(msgs => [...msgs, {
+          role: 'assistant',
+          content: data.response || data.message || 'No response',
+          sources: data.sources || [],
+          timestamp: new Date().toISOString()
+        }]);
+      } else {
+        chatMessages.update(msgs => [...msgs, {
+          role: 'assistant',
+          content: 'Error: Could not fetch summary.',
+          isError: true,
+          timestamp: new Date().toISOString()
+        }]);
+      }
+    } catch (e) {
+      chatMessages.update(msgs => [...msgs, {
+        role: 'assistant',
+        content: 'Error: Could not connect to daemon.',
+        isError: true,
+        timestamp: new Date().toISOString()
+      }]);
+    }
+  }
+
+  // Click on a cluster to explore its documents
+  async function exploreCluster(cluster) {
+    const query = `Tell me about documents in the "${cluster.label}" topic. What are the key themes, who are the main people involved, and what are the important details?`;
+
+    // Add to chat and trigger search
+    chatMessages.set([
+      {
+        role: 'user',
+        content: query,
+        timestamp: new Date().toISOString()
+      }
+    ]);
+
+    activeSection.set('chat');
+
+    // Make the API call
+    try {
+      const response = await fetch('http://127.0.0.1:8000/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: query })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        chatMessages.update(msgs => [...msgs, {
+          role: 'assistant',
+          content: data.response || data.message || 'No response',
+          sources: data.sources || [],
+          timestamp: new Date().toISOString()
+        }]);
+      } else {
+        chatMessages.update(msgs => [...msgs, {
+          role: 'assistant',
+          content: 'Error: Could not fetch cluster summary.',
+          isError: true,
+          timestamp: new Date().toISOString()
+        }]);
+      }
+    } catch (e) {
+      chatMessages.update(msgs => [...msgs, {
+        role: 'assistant',
+        content: 'Error: Could not connect to daemon.',
+        isError: true,
+        timestamp: new Date().toISOString()
+      }]);
+    }
+  }
+
   async function loadFavoriteSearch(fav) {
+    // Set the search stores (for backwards compatibility)
     searchQuery.set(fav.query);
     searchResults.set(fav.results);
+
+    // Also load into chat as a saved conversation
+    if (fav.results && fav.results.length > 0) {
+      // Clear existing chat and add the saved conversation
+      chatMessages.set([
+        {
+          role: 'user',
+          content: fav.query,
+          timestamp: fav.savedAt
+        },
+        {
+          role: 'assistant',
+          content: fav.results[0].content || fav.results[0].text || 'No content',
+          sources: fav.results.slice(1),
+          timestamp: fav.savedAt
+        }
+      ]);
+    }
+
+    // Switch to chat view if not already there
+    activeSection.set('chat');
   }
 
   let isConnecting = false;
@@ -26,40 +221,55 @@
   let isStartingDaemon = false;
   let unlockError = '';
   let showAddNoteModal = false;
+  let showFileUploadModal = false;
 
   async function refreshStats() {
     connectionError = '';
+    debugLog('REFRESH', 'Starting daemon check and stats refresh...');
+    const startTime = performance.now();
+
     try {
-      console.log('Checking daemon at http://127.0.0.1:8000/...');
+      debugLog('DAEMON', 'Checking daemon connection...');
       const connected = await checkDaemon();
-      console.log('Daemon check result:', connected);
+      debugLog('DAEMON', `Connection check result: ${connected}`);
       daemonConnected.set(connected);
 
       if (connected) {
-        console.log('Fetching stats, tags, database info, and API status...');
-        const [statsData, tagsData, dbInfo, apiStatus] = await Promise.all([
-          getStats(),
-          getTags(),
-          getDatabaseInfo().catch(() => null),
-          getApiKeysStatus().catch(() => null)
+        debugLog('FETCH', 'Fetching all data in parallel...');
+        const [statsData, tagsData, dbInfo, apiStatus, clustersData] = await Promise.all([
+          getStats().catch(e => { debugLog('ERROR', `Stats fetch failed: ${e.message}`); return null; }),
+          getTags().catch(e => { debugLog('ERROR', `Tags fetch failed: ${e.message}`); return []; }),
+          getDatabaseInfo().catch(e => { debugLog('ERROR', `DB info fetch failed: ${e.message}`); return null; }),
+          getApiKeysStatus().catch(e => { debugLog('ERROR', `API keys fetch failed: ${e.message}`); return null; }),
+          getClusters().catch(e => { debugLog('ERROR', `Clusters fetch failed: ${e.message}`); return []; })
         ]);
-        console.log('Stats:', statsData);
-        console.log('Tags:', tagsData);
-        console.log('Database Info:', dbInfo);
-        console.log('API Status:', apiStatus);
-        stats.set(statsData);
-        tags.set(tagsData);
-        if (dbInfo) {
-          databaseInfo.set(dbInfo);
-        }
+
+        const elapsed = Math.round(performance.now() - startTime);
+        debugLog('FETCH', `All data fetched in ${elapsed}ms`, {
+          stats: !!statsData,
+          tags: tagsData?.length || 0,
+          clusters: clustersData?.length || 0,
+          dbInfo: !!dbInfo,
+          apiStatus: apiStatus
+        });
+
+        if (statsData) stats.set(statsData);
+        if (tagsData) tags.set(tagsData);
+        if (clustersData) clusters.set(clustersData);
+        if (dbInfo) databaseInfo.set(dbInfo);
         if (apiStatus) {
+          debugLog('API_STATUS', 'Setting API keys status:', apiStatus);
           apiKeysStatus.set(apiStatus);
+        } else {
+          debugLog('API_STATUS', 'WARNING: No API status received, keeping default');
         }
       } else {
+        debugLog('DAEMON', 'Daemon not running or not responding');
         connectionError = 'Daemon not running';
       }
     } catch (e) {
-      console.error('Connection failed:', e);
+      const elapsed = Math.round(performance.now() - startTime);
+      debugLog('ERROR', `Connection failed after ${elapsed}ms: ${e.message}`);
       connectionError = e.message || 'Connection failed';
       daemonConnected.set(false);
     }
@@ -111,8 +321,19 @@
     showAddNoteModal = false;
   }
 
-  onMount(() => {
+  function handleFileUploaded(event) {
+    // Refresh stats to show updated document count
     refreshStats();
+    showFileUploadModal = false;
+  }
+
+  onMount(async () => {
+    // Check daemon and auto-show unlock modal if not running
+    await refreshStats();
+    if (!$daemonConnected) {
+      showUnlockModal = true;
+    }
+    loadSavedFolders();
     const interval = setInterval(refreshStats, 30000);
     return () => clearInterval(interval);
   });
@@ -158,17 +379,18 @@
           <span class="db-count">({$databaseInfo.available_databases.length} available)</span>
         {/if}
       </div>
+      <div class="database-path" title={$databaseInfo.database_path}>
+        {$databaseInfo.database_path ? $databaseInfo.database_path.replace(/\\/g, '/').split('/').slice(-2).join('/') : ''}
+      </div>
     {/if}
     {#if $daemonConnected}
       <div class="api-status">
         <span class="api-label">LLM:</span>
-        {#if $apiKeysStatus.openai}
-          <span class="api-badge active" title="OpenAI API key configured">OpenAI</span>
-        {/if}
         {#if $apiKeysStatus.anthropic}
-          <span class="api-badge active" title="Anthropic API key configured">Claude</span>
-        {/if}
-        {#if !$apiKeysStatus.openai && !$apiKeysStatus.anthropic}
+          <span class="api-badge active" title="Anthropic Claude (primary)">Claude</span>
+        {:else if $apiKeysStatus.openai}
+          <span class="api-badge active" title="OpenAI GPT-4o (fallback)">OpenAI</span>
+        {:else}
           <span class="api-badge inactive" title="No API keys configured">None</span>
         {/if}
       </div>
@@ -206,6 +428,18 @@
         <path d="M12 5v14M5 12h14"/>
       </svg>
       Add Note
+    </button>
+    <button
+      class="nav-item add-doc"
+      on:click={() => showFileUploadModal = true}
+      disabled={!$daemonConnected}
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      Add Document
     </button>
   </nav>
 
@@ -268,30 +502,167 @@
       </button>
       {#if expandedSections.sources}
         <div class="section-content sources">
-          <div class="source-item">
+          <button
+            class="source-item clickable"
+            on:click={() => exploreDataSource('emails')}
+            disabled={!$daemonConnected || ($stats.sources?.emails || 0) === 0}
+            title="Click for email summary"
+          >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2">
               <rect x="2" y="4" width="20" height="16" rx="2"/>
               <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
             </svg>
             <span>Outlook Emails</span>
             <span class="source-count">{$stats.sources?.emails || 0}</span>
-          </div>
-          <div class="source-item">
+            <svg class="explore-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="m9 18 6-6-6-6"/>
+            </svg>
+          </button>
+          <button
+            class="source-item clickable"
+            on:click={() => exploreDataSource('documents')}
+            disabled={!$daemonConnected || ($stats.sources?.documents || 0) === 0}
+            title="Click for document summary"
+          >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-green)" stroke-width="2">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
               <path d="M14 2v6h6"/>
             </svg>
             <span>Documents</span>
             <span class="source-count">{$stats.sources?.documents || 0}</span>
-          </div>
-          <div class="source-item">
+            <svg class="explore-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="m9 18 6-6-6-6"/>
+            </svg>
+          </button>
+          <button
+            class="source-item clickable"
+            on:click={() => exploreDataSource('notes')}
+            disabled={!$daemonConnected || ($stats.sources?.notes || 0) === 0}
+            title="Click for notes summary"
+          >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-purple)" stroke-width="2">
               <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
               <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
             </svg>
             <span>Notes & Pastes</span>
             <span class="source-count">{$stats.sources?.notes || 0}</span>
-          </div>
+            <svg class="explore-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="m9 18 6-6-6-6"/>
+            </svg>
+          </button>
+        </div>
+      {/if}
+    </div>
+
+    <!-- Clusters Section -->
+    {#if $clusters.length > 0}
+    <div class="section">
+      <button class="section-header" on:click={() => toggleSection('clusters')}>
+        <svg class="chevron" class:expanded={expandedSections.clusters} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="m9 18 6-6-6-6"/>
+        </svg>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <circle cx="19" cy="5" r="2"/>
+          <circle cx="5" cy="5" r="2"/>
+          <circle cx="19" cy="19" r="2"/>
+          <circle cx="5" cy="19" r="2"/>
+          <line x1="12" y1="9" x2="12" y2="3"/>
+          <line x1="9.5" y1="14" x2="5" y2="17"/>
+          <line x1="14.5" y1="14" x2="19" y2="17"/>
+        </svg>
+        <span>Topics</span>
+        <span class="count">{$clusters.length}</span>
+      </button>
+      {#if expandedSections.clusters}
+        <div class="section-content clusters">
+          {#each $clusters.slice(0, 10) as cluster}
+            <button
+              class="cluster-item"
+              on:click={() => exploreCluster(cluster)}
+              title="{cluster.document_count} documents"
+            >
+              <span class="cluster-label">{cluster.label}</span>
+              <span class="cluster-count">{cluster.document_count}</span>
+            </button>
+          {/each}
+          {#if $clusters.length > 10}
+            <div class="more-hint">+{$clusters.length - 10} more topics</div>
+          {/if}
+        </div>
+      {/if}
+    </div>
+    {/if}
+
+    <!-- Saved Folders Section -->
+    <div class="section">
+      <button class="section-header" on:click={() => toggleSection('saved')}>
+        <svg class="chevron" class:expanded={expandedSections.saved} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="m9 18 6-6-6-6"/>
+        </svg>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
+        </svg>
+        <span>Folders</span>
+        <span class="count">{getTotalSavedCount($savedFolders)}</span>
+      </button>
+      {#if expandedSections.saved}
+        <div class="section-content folders">
+          {#each $savedFolders as folder}
+            <div class="folder">
+              <button class="folder-header" on:click={() => toggleFolder(folder.id)}>
+                <svg class="chevron small" class:expanded={expandedFolders[folder.id]} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="m9 18 6-6-6-6"/>
+                </svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-orange)" stroke-width="2">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                </svg>
+                <span class="folder-name">{folder.name}</span>
+                <span class="folder-count">{folder.items?.length || 0}</span>
+              </button>
+              {#if expandedFolders[folder.id] && folder.items?.length > 0}
+                <div class="folder-items">
+                  {#each folder.items as item}
+                    <div class="saved-item">
+                      <button class="saved-query" on:click={() => loadSavedItem(item)} title={item.query}>
+                        {item.query || 'Untitled'}
+                      </button>
+                      <button class="remove-btn" on:click={() => removeFromFolder(folder.id, item.id)} title="Remove">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M18 6L6 18M6 6l12 12"/>
+                        </svg>
+                      </button>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          {/each}
+
+          {#if showNewFolderInput}
+            <div class="new-folder-input">
+              <input
+                type="text"
+                bind:value={newFolderName}
+                on:keydown={handleFolderKeydown}
+                placeholder="Folder name..."
+                autofocus
+              />
+              <button class="add-folder-btn" on:click={handleAddFolder}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M5 12h14"/>
+                  <path d="M12 5v14"/>
+                </svg>
+              </button>
+            </div>
+          {:else}
+            <button class="add-folder-link" on:click={() => showNewFolderInput = true}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
+              New folder
+            </button>
+          {/if}
         </div>
       {/if}
     </div>
@@ -311,6 +682,12 @@
   visible={showAddNoteModal}
   on:added={handleNoteAdded}
   on:close={() => showAddNoteModal = false}
+/>
+
+<FileUploadModal
+  visible={showFileUploadModal}
+  on:uploaded={handleFileUploaded}
+  on:close={() => showFileUploadModal = false}
 />
 
 <style>
@@ -451,6 +828,18 @@
     color: var(--text-muted);
   }
 
+  .database-path {
+    margin-top: 4px;
+    padding: 4px 10px;
+    font-size: 10px;
+    color: var(--text-muted);
+    font-family: 'Consolas', 'Monaco', monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: help;
+  }
+
   .api-status {
     display: flex;
     align-items: center;
@@ -523,6 +912,22 @@
   }
 
   .nav-item.add-note:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .nav-item.add-doc {
+    border: 1px dashed var(--border-color);
+    margin-top: 4px;
+  }
+
+  .nav-item.add-doc:hover:not(:disabled) {
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+    background: rgba(59, 130, 246, 0.1);
+  }
+
+  .nav-item.add-doc:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
@@ -670,10 +1075,43 @@
     gap: 8px;
     font-size: 13px;
     color: var(--text-secondary);
+    width: 100%;
+    background: transparent;
+    border: none;
+    text-align: left;
+    font-family: inherit;
+  }
+
+  .source-item.clickable {
+    padding: 8px 10px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .source-item.clickable:hover:not(:disabled) {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+
+  .source-item.clickable:hover:not(:disabled) .explore-icon {
+    opacity: 1;
+    color: var(--accent-orange);
+  }
+
+  .source-item.clickable:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .source-item span:first-of-type {
     flex: 1;
+  }
+
+  .explore-icon {
+    opacity: 0;
+    transition: opacity 0.2s;
+    margin-left: auto;
   }
 
   .source-count {
@@ -683,6 +1121,221 @@
     font-size: 11px;
     font-weight: 600;
     color: var(--text-muted);
+  }
+
+  /* Cluster Styles */
+  .section-content.clusters {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .cluster-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+    font-family: inherit;
+  }
+
+  .cluster-item:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--accent-orange);
+    color: var(--text-primary);
+  }
+
+  .cluster-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cluster-count {
+    background: rgba(249, 115, 22, 0.15);
+    color: var(--accent-orange);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+    margin-left: 8px;
+  }
+
+  .more-hint {
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 4px 0;
+    font-style: italic;
+  }
+
+  /* Folder Styles */
+  .folders {
+    padding: 4px 8px 8px 24px;
+  }
+
+  .folder {
+    margin-bottom: 4px;
+  }
+
+  .folder-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 6px 8px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius);
+    color: var(--text-secondary);
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .folder-header:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+
+  .chevron.small {
+    width: 12px;
+    height: 12px;
+  }
+
+  .folder-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .folder-count {
+    background: var(--bg-tertiary);
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+
+  .folder-items {
+    padding-left: 20px;
+    margin-top: 4px;
+  }
+
+  .saved-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 2px;
+  }
+
+  .saved-query {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 11px;
+    text-align: left;
+    padding: 4px 6px;
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border-radius: var(--radius);
+    transition: all 0.15s;
+  }
+
+  .saved-query:hover {
+    background: var(--bg-tertiary);
+    color: var(--accent-orange);
+  }
+
+  .saved-item .remove-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: 2px;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+
+  .saved-item:hover .remove-btn {
+    opacity: 1;
+  }
+
+  .saved-item .remove-btn:hover {
+    color: var(--accent-red);
+  }
+
+  .new-folder-input {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .new-folder-input input {
+    flex: 1;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    padding: 6px 10px;
+    font-size: 12px;
+    color: var(--text-primary);
+    outline: none;
+  }
+
+  .new-folder-input input:focus {
+    border-color: var(--accent-orange);
+  }
+
+  .add-folder-btn {
+    background: var(--accent-orange);
+    border: none;
+    border-radius: var(--radius);
+    padding: 6px 8px;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .add-folder-btn:hover {
+    background: #ea580c;
+  }
+
+  .add-folder-link {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: 1px dashed var(--border-color);
+    border-radius: var(--radius);
+    padding: 6px 10px;
+    font-size: 11px;
+    color: var(--text-muted);
+    cursor: pointer;
+    margin-top: 8px;
+    width: 100%;
+    transition: all 0.2s;
+  }
+
+  .add-folder-link:hover {
+    border-color: var(--accent-orange);
+    color: var(--accent-orange);
   }
 
 </style>

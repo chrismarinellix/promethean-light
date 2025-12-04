@@ -26,6 +26,17 @@ class AddTextRequest(BaseModel):
     source: str = "api"
 
 
+class CheckDuplicateRequest(BaseModel):
+    content: str
+    threshold: float = 0.92
+
+
+class CheckDuplicateResponse(BaseModel):
+    is_duplicate: bool
+    confidence: float
+    matches: List[dict] = []
+
+
 class SearchRequest(BaseModel):
     query: str
     limit: int = 10
@@ -81,7 +92,23 @@ _vectordb: Optional[VectorDB] = None
 _pipeline: Optional[IngestionPipeline] = None
 _hybrid_searcher = None
 _anonymizer = None
+_chatbot = None
 _startup_event: Optional[threading.Event] = None
+
+# Rebuild state for background task tracking
+_rebuild_state = {
+    "status": "idle",  # idle, running, complete, error
+    "progress": 0,
+    "total_chunks": 0,
+    "indexed": 0,
+    "skipped": 0,
+    "errors": 0,
+    "error_messages": [],
+    "start_time": None,
+    "elapsed_seconds": 0,
+    "rate_per_second": 0,
+    "message": ""
+}
 
 
 def init_services(crypto, db, storage, embedder, vectordb, pipeline, hybrid_searcher=None, anonymizer=None, startup_event=None):
@@ -109,7 +136,7 @@ async def startup():
             _startup_event.set()  # Signal that API is ready
         return
 
-    print("🚀 Starting MyData API...")
+    print("Starting MyData API...")
 
     # Initialize components
     _crypto = CryptoManager()
@@ -117,9 +144,9 @@ async def startup():
     # Try to unlock (will fail if not set up or no env var)
     try:
         _crypto.unlock()
-        print("✓ Crypto unlocked")
+        print("[OK] Crypto unlocked")
     except Exception as e:
-        print(f"⚠ Crypto not unlocked: {e}")
+        print(f"[WARN] Crypto not unlocked: {e}")
 
     _db = Database()
     _storage = EncryptedStorage(_crypto) if _crypto.is_unlocked else None
@@ -131,11 +158,11 @@ async def startup():
         session = _db.session()
         ml_organizer = MLOrganizer(_embedder, session)
         _pipeline = IngestionPipeline(session, _storage, _embedder, _vectordb, ml_organizer)
-        print("✓ Ingestion pipeline ready")
+        print("[OK] Ingestion pipeline ready")
     else:
-        print("⚠ Ingestion pipeline not available (crypto locked)")
+        print("[WARN] Ingestion pipeline not available (crypto locked)")
 
-    print("✓ MyData API started")
+    print("[OK] MyData API started")
 
     if _startup_event:
         _startup_event.set()  # Signal that API is ready
@@ -175,23 +202,88 @@ async def add_text(request: AddTextRequest):
 
 
 @app.post("/add/file")
-async def add_file(file: UploadFile = File(...)):
-    """Add file document"""
+async def add_file(file: UploadFile = File(...), force: bool = False):
+    """Add file document with optional duplicate override"""
     if not _pipeline:
         raise HTTPException(status_code=503, detail="Ingestion pipeline not available")
 
-    # Save temporarily
-    temp_path = Path(f"/tmp/{file.filename}")
+    # Use temp directory that works on Windows
+    import tempfile
+    temp_dir = Path(tempfile.gettempdir())
+    temp_path = temp_dir / file.filename
     content = await file.read()
     temp_path.write_bytes(content)
 
     try:
         doc_id = _pipeline.ingest_file(temp_path)
         if doc_id is None:
-            raise HTTPException(status_code=500, detail="Failed to ingest file")
-        return {"id": str(doc_id), "status": "success"}
+            raise HTTPException(status_code=500, detail="Failed to ingest file (may be duplicate)")
+
+        # Get chunk count for the response
+        from .models import Chunk
+        session = _db.session()
+        chunks = session.exec(select(Chunk).where(Chunk.doc_id == doc_id)).all()
+
+        return {
+            "id": str(doc_id),
+            "status": "success",
+            "filename": file.filename,
+            "chunks_created": len(chunks),
+            "size_bytes": len(content)
+        }
     finally:
         temp_path.unlink(missing_ok=True)
+
+
+@app.post("/check-duplicate")
+async def check_duplicate(request: CheckDuplicateRequest) -> CheckDuplicateResponse:
+    """Check if content already exists in the database before ingesting"""
+    if not _embedder or not _vectordb:
+        raise HTTPException(status_code=503, detail="Search not available")
+
+    # Take sample of content (first 500 chars for speed)
+    sample = request.content[:500] if len(request.content) > 500 else request.content
+
+    if len(sample.strip()) < 20:
+        return CheckDuplicateResponse(is_duplicate=False, confidence=0, matches=[])
+
+    try:
+        # Embed the sample
+        query_vector = _embedder.embed(sample)
+
+        # Search for similar content
+        results = _vectordb.search(
+            query_vector=query_vector,
+            limit=3,
+        )
+
+        # Check for high-similarity matches
+        matches = []
+        max_score = 0
+
+        for hit in results:
+            score = hit.get("score", 0)
+            if score >= request.threshold:
+                matches.append({
+                    "id": hit.get("id", ""),
+                    "score": round(score, 4),
+                    "text": hit.get("payload", {}).get("text", "")[:200] + "...",
+                    "source": hit.get("payload", {}).get("source", "unknown"),
+                })
+            if score > max_score:
+                max_score = score
+
+        is_duplicate = len(matches) > 0
+
+        return CheckDuplicateResponse(
+            is_duplicate=is_duplicate,
+            confidence=round(max_score, 4),
+            matches=matches
+        )
+
+    except Exception as e:
+        # If check fails, return not duplicate (fail open)
+        return CheckDuplicateResponse(is_duplicate=False, confidence=0, matches=[])
 
 
 @app.post("/search")
@@ -336,6 +428,76 @@ async def get_tags() -> List[dict]:
     tag_counts = Counter([t.tag for t in tags])
 
     return [{"tag": tag, "count": count} for tag, count in tag_counts.most_common()]
+
+
+@app.get("/clusters")
+async def get_clusters() -> List[dict]:
+    """Get all clusters with their labels and document counts"""
+    if not _db:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    session = _db.session()
+    clusters = session.exec(select(Cluster).order_by(Cluster.document_count.desc())).all()
+
+    return [
+        {
+            "id": c.id,
+            "label": c.label,
+            "description": c.description,
+            "document_count": c.document_count,
+            "created_at": c.created_at.isoformat() if c.created_at else None
+        }
+        for c in clusters
+    ]
+
+
+@app.get("/clusters/{cluster_id}/documents")
+async def get_cluster_documents(cluster_id: int, limit: int = 20) -> List[dict]:
+    """Get documents in a specific cluster"""
+    if not _db:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    session = _db.session()
+    docs = session.exec(
+        select(Document)
+        .where(Document.cluster_id == cluster_id)
+        .order_by(Document.updated_at.desc())
+        .limit(limit)
+    ).all()
+
+    return [
+        {
+            "id": str(d.id),
+            "source": d.source,
+            "source_type": d.source_type,
+            "preview": d.raw_text[:200] if d.raw_text else "",
+            "created_at": d.created_at.isoformat() if d.created_at else None
+        }
+        for d in docs
+    ]
+
+
+@app.post("/clusters/rebuild")
+async def rebuild_clusters(min_cluster_size: int = 10, min_samples: int = 5):
+    """Manually trigger cluster rebuild"""
+    if not _db or not _embedder:
+        raise HTTPException(status_code=503, detail="Database or embedder not available")
+
+    from .ml_organizer import MLOrganizer
+
+    session = _db.session()
+    organizer = MLOrganizer(_embedder, session)
+
+    # Force has_changes to trigger clustering
+    organizer._last_doc_count = -1
+
+    result = organizer.run_clustering(min_cluster_size=min_cluster_size, min_samples=min_samples)
+
+    return {
+        "status": result.get("status", "unknown"),
+        "clusters": result.get("clusters", 0),
+        "message": f"Created {result.get('clusters', 0)} clusters from {result.get('doc_count', 0)} documents"
+    }
 
 
 @app.get("/dashboard/stats")
@@ -503,6 +665,177 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=500, detail=f"Chat failed: {str(e)}")
 
 
+# War Room intelligence view
+class WarRoomRequest(BaseModel):
+    query: str
+    context: Optional[str] = None
+
+
+class WarRoomResponse(BaseModel):
+    status: str = "Active"
+    lastUpdate: str
+    timeline: List[dict] = []
+    people: List[dict] = []
+    topics: dict = {}
+    actions: List[dict] = []
+    issues: List[dict] = []
+    documents: List[dict] = []
+    stats: dict = {}
+
+
+@app.post("/warroom")
+async def get_warroom_data(request: WarRoomRequest) -> WarRoomResponse:
+    """Get War Room intelligence view for a topic"""
+    import re
+    from datetime import datetime
+
+    if not _db or not _embedder or not _vectordb:
+        raise HTTPException(status_code=503, detail="Service not available")
+
+    # Search for related documents
+    query_vector = _embedder.embed(request.query)
+    results = _vectordb.search(query_vector=query_vector, limit=50)
+
+    # Aggregate all text for analysis
+    all_text = request.context or ""
+    sources = []
+
+    for hit in results:
+        payload = hit.get("payload", {})
+        text = payload.get("text", "")
+        source = payload.get("source", "")
+        all_text += f"\n{text}"
+        sources.append({
+            "source": source,
+            "text": text[:200],
+            "score": hit.get("score", 0)
+        })
+
+    # Extract timeline events
+    timeline = []
+    date_patterns = [
+        (r'(\d{4}-\d{2}-\d{2})[:\s-]+(.+?)(?=\n|$)', lambda m: m.group(1)),
+        (r'((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+\d{1,2},?\s*\d{4})[:\s-]*(.+?)(?=\n|$)', lambda m: m.group(1)),
+    ]
+    seen_events = set()
+    for pattern, date_extractor in date_patterns:
+        for match in re.finditer(pattern, all_text, re.IGNORECASE):
+            event = match.group(2).strip()[:100] if len(match.groups()) > 1 else ""
+            if event and event not in seen_events:
+                seen_events.add(event)
+                timeline.append({
+                    "date": date_extractor(match),
+                    "event": event
+                })
+    timeline = timeline[:15]  # Limit
+
+    # Extract people
+    people = []
+    seen_people = set()
+    email_pattern = r'([A-Za-z][A-Za-z\s\.]+)\s*[<(]([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})[>)]'
+    for match in re.finditer(email_pattern, all_text):
+        name = match.group(1).strip()
+        email = match.group(2)
+        if name.lower() not in seen_people and len(name) > 2:
+            seen_people.add(name.lower())
+            domain = email.split('@')[1].split('.')[0] if '@' in email else ''
+            people.append({
+                "name": name,
+                "email": email,
+                "role": "",
+                "org": domain.capitalize()
+            })
+    people = people[:20]
+
+    # Extract topics
+    topics = {"technical": [], "commercial": [], "process": []}
+    tech_kw = ['technical', 'engineering', 'system', 'design', 'analysis', 'model', 'data', 'powerlink', 'grid']
+    comm_kw = ['contract', 'price', 'cost', 'budget', 'fee', 'insurance', 'commercial', 'payment', 'invoice']
+    proc_kw = ['approval', 'review', 'meeting', 'deadline', 'timeline', 'schedule', 'milestone']
+
+    for line in all_text.split('\n'):
+        line_clean = line.strip()
+        if len(line_clean) > 20:
+            lower = line_clean.lower()
+            if any(k in lower for k in tech_kw) and len(topics["technical"]) < 5:
+                topics["technical"].append(line_clean[:100])
+            if any(k in lower for k in comm_kw) and len(topics["commercial"]) < 5:
+                topics["commercial"].append(line_clean[:100])
+            if any(k in lower for k in proc_kw) and len(topics["process"]) < 5:
+                topics["process"].append(line_clean[:100])
+
+    # Extract actions
+    actions = []
+    action_patterns = [
+        r'(?:TODO|ACTION|TASK)[:\s]+(.+?)(?=\n|$)',
+        r'(?:CRITICAL|URGENT|PENDING)[:\s]+(.+?)(?=\n|$)',
+    ]
+    for pattern in action_patterns:
+        for match in re.finditer(pattern, all_text, re.IGNORECASE):
+            action_text = match.group(1).strip()
+            if 10 < len(action_text) < 200:
+                status = "critical" if "critical" in match.group(0).lower() else "pending"
+                actions.append({
+                    "status": status,
+                    "description": action_text,
+                    "owner": "",
+                    "due": ""
+                })
+    actions = actions[:15]
+
+    # Extract issues
+    issues = []
+    issue_patterns = [
+        r'(?:issue|problem|risk|blocker|concern)[:\s]+(.+?)(?=\n|$)',
+        r'(?:BLOCKED|WARNING)[:\s]+(.+?)(?=\n|$)',
+    ]
+    for pattern in issue_patterns:
+        for match in re.finditer(pattern, all_text, re.IGNORECASE):
+            issue_text = match.group(1).strip()
+            if len(issue_text) > 10:
+                severity = "high" if "block" in match.group(0).lower() else "medium"
+                issues.append({
+                    "severity": severity,
+                    "description": issue_text[:150],
+                    "status": "open"
+                })
+    issues = issues[:10]
+
+    # Format documents
+    documents = []
+    for src in sources[:20]:
+        source_str = src.get("source", "")
+        doc_type = "email" if ("@" in source_str or "email" in source_str.lower()) else "file"
+        if ".pdf" in source_str.lower():
+            doc_type = "pdf"
+        documents.append({
+            "type": doc_type,
+            "title": source_str.split("/")[-1].split("\\")[-1][:50] if source_str else "Unknown",
+            "date": "",
+            "summary": src.get("text", "")[:100]
+        })
+
+    # Stats
+    stats = {
+        "documents": len(documents),
+        "emails": len([d for d in documents if d["type"] == "email"]),
+        "people": len(people),
+        "actions": len(actions)
+    }
+
+    return WarRoomResponse(
+        status="Active" if len(results) > 0 else "No Data",
+        lastUpdate=datetime.now().strftime("%Y-%m-%d"),
+        timeline=timeline,
+        people=people,
+        topics=topics,
+        actions=actions,
+        issues=issues,
+        documents=documents,
+        stats=stats
+    )
+
+
 # API Key management
 class ApiKeyRequest(BaseModel):
     service: str
@@ -652,7 +985,9 @@ async def get_admin_info():
             "embedder_ready": _embedder is not None,
             "vectordb_ready": _vectordb is not None,
             "pipeline_ready": _pipeline is not None,
-            "chatbot_ready": _chatbot is not None,
+            # Chatbot is ready if we have the components to create one on-demand
+            "chatbot_ready": (_db is not None and _crypto is not None and
+                             _crypto.is_unlocked and _embedder is not None and _vectordb is not None),
         },
         "database": {},
         "vectordb": {},
@@ -712,3 +1047,349 @@ async def get_admin_info():
     info["available_databases"] = Config.list_databases()
 
     return info
+
+
+def _run_rebuild_background():
+    """Background worker function for rebuild - runs in a separate thread"""
+    import time
+    from .models import Chunk, Document
+
+    global _rebuild_state
+
+    try:
+        _rebuild_state["status"] = "running"
+        _rebuild_state["start_time"] = time.time()
+        _rebuild_state["indexed"] = 0
+        _rebuild_state["skipped"] = 0
+        _rebuild_state["errors"] = 0
+        _rebuild_state["error_messages"] = []
+        _rebuild_state["message"] = "Starting rebuild..."
+
+        session = _db.session()
+        chunks = session.exec(select(Chunk)).all()
+        total_chunks = len(chunks)
+        _rebuild_state["total_chunks"] = total_chunks
+
+        if total_chunks == 0:
+            _rebuild_state["status"] = "complete"
+            _rebuild_state["message"] = "No chunks to index"
+            return
+
+        for i, chunk in enumerate(chunks):
+            try:
+                text = chunk.text if hasattr(chunk, 'text') else chunk.content
+
+                if not text or len(text.strip()) < 10:
+                    _rebuild_state["skipped"] += 1
+                    continue
+
+                # Get document source for metadata
+                doc = session.get(Document, chunk.doc_id)
+                source = doc.source if doc else "unknown"
+
+                # Embed the text
+                embedding = _embedder.embed(text)
+
+                # Upsert to vector DB
+                _vectordb.upsert(
+                    doc_id=str(chunk.id),
+                    vector=embedding,
+                    payload={
+                        "text": text[:2000],
+                        "source": source,
+                        "doc_id": str(chunk.doc_id),
+                        "start_offset": chunk.start_offset,
+                        "end_offset": chunk.end_offset,
+                    }
+                )
+                _rebuild_state["indexed"] += 1
+
+            except Exception as e:
+                _rebuild_state["errors"] += 1
+                if _rebuild_state["errors"] <= 10:
+                    _rebuild_state["error_messages"].append(f"Chunk {chunk.id}: {str(e)}")
+
+            # Update progress
+            _rebuild_state["progress"] = round((i + 1) / total_chunks * 100, 1)
+            elapsed = time.time() - _rebuild_state["start_time"]
+            _rebuild_state["elapsed_seconds"] = round(elapsed, 1)
+            if elapsed > 0:
+                _rebuild_state["rate_per_second"] = round(_rebuild_state["indexed"] / elapsed, 2)
+            _rebuild_state["message"] = f"Processing chunk {i + 1}/{total_chunks}..."
+
+        # Complete
+        _rebuild_state["status"] = "complete"
+        _rebuild_state["progress"] = 100
+        _rebuild_state["message"] = f"Rebuild complete: {_rebuild_state['indexed']} indexed, {_rebuild_state['errors']} errors"
+
+    except Exception as e:
+        _rebuild_state["status"] = "error"
+        _rebuild_state["message"] = f"Rebuild failed: {str(e)}"
+
+
+@app.post("/admin/rebuild-vectors")
+async def rebuild_vectors():
+    """
+    Start rebuilding the vector database in the background.
+    Returns immediately and tracks progress via /admin/rebuild-vectors/status
+    """
+    global _rebuild_state
+
+    if not _db:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+    if not _embedder:
+        raise HTTPException(status_code=500, detail="Embedder not initialized")
+    if not _vectordb:
+        raise HTTPException(status_code=500, detail="Vector DB not initialized")
+
+    # Check if already running
+    if _rebuild_state["status"] == "running":
+        return {
+            "success": False,
+            "message": "Rebuild already in progress",
+            "status": _rebuild_state["status"],
+            "progress": _rebuild_state["progress"]
+        }
+
+    # Reset state
+    _rebuild_state = {
+        "status": "running",
+        "progress": 0,
+        "total_chunks": 0,
+        "indexed": 0,
+        "skipped": 0,
+        "errors": 0,
+        "error_messages": [],
+        "start_time": None,
+        "elapsed_seconds": 0,
+        "rate_per_second": 0,
+        "message": "Starting..."
+    }
+
+    # Start background thread
+    rebuild_thread = threading.Thread(target=_run_rebuild_background, daemon=True)
+    rebuild_thread.start()
+
+    return {
+        "success": True,
+        "message": "Rebuild started in background",
+        "status": "running"
+    }
+
+
+@app.get("/admin/rebuild-vectors/status")
+async def rebuild_vectors_status():
+    """Get current rebuild status including live progress during rebuild"""
+    global _rebuild_state
+
+    if not _db:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+    if not _vectordb:
+        raise HTTPException(status_code=500, detail="Vector DB not initialized")
+
+    # Get current vector count
+    vector_count = _vectordb.count()
+
+    # If rebuild is running, return live progress
+    if _rebuild_state["status"] == "running":
+        return {
+            "status": _rebuild_state["status"],
+            "progress": _rebuild_state["progress"],
+            "total_chunks": _rebuild_state["total_chunks"],
+            "indexed": _rebuild_state["indexed"],
+            "skipped": _rebuild_state["skipped"],
+            "errors": _rebuild_state["errors"],
+            "error_messages": _rebuild_state["error_messages"],
+            "elapsed_seconds": _rebuild_state["elapsed_seconds"],
+            "rate_per_second": _rebuild_state["rate_per_second"],
+            "message": _rebuild_state["message"],
+            "vector_count": vector_count
+        }
+
+    # If rebuild is complete or errored, return final state
+    if _rebuild_state["status"] in ["complete", "error"]:
+        return {
+            "status": _rebuild_state["status"],
+            "progress": _rebuild_state["progress"],
+            "total_chunks": _rebuild_state["total_chunks"],
+            "indexed": _rebuild_state["indexed"],
+            "skipped": _rebuild_state["skipped"],
+            "errors": _rebuild_state["errors"],
+            "error_messages": _rebuild_state["error_messages"],
+            "elapsed_seconds": _rebuild_state["elapsed_seconds"],
+            "rate_per_second": _rebuild_state["rate_per_second"],
+            "message": _rebuild_state["message"],
+            "vector_count": vector_count
+        }
+
+    # Idle state - return basic sync info
+    from .models import Chunk
+    session = _db.session()
+    total_chunks = len(session.exec(select(Chunk)).all())
+
+    return {
+        "status": "idle",
+        "total_chunks": total_chunks,
+        "vector_count": vector_count,
+        "sync_percentage": round((vector_count / total_chunks * 100), 1) if total_chunks > 0 else 0,
+        "in_sync": vector_count >= total_chunks * 0.95  # Consider in sync if >= 95%
+    }
+
+
+# Saved Searches API
+class SavedSearchRequest(BaseModel):
+    folder: str = "general"
+    query: str
+    response: str
+    sources: Optional[str] = None
+
+
+class SavedSearchResponse(BaseModel):
+    id: int
+    folder: str
+    query: str
+    response: str
+    sources: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+
+@app.get("/saved-searches")
+async def get_saved_searches(folder: Optional[str] = None) -> List[SavedSearchResponse]:
+    """Get all saved searches, optionally filtered by folder"""
+    if not _db:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    from .models import SavedSearch
+
+    session = _db.session()
+
+    if folder:
+        searches = session.exec(
+            select(SavedSearch)
+            .where(SavedSearch.folder == folder)
+            .order_by(SavedSearch.created_at.desc())
+        ).all()
+    else:
+        searches = session.exec(
+            select(SavedSearch)
+            .order_by(SavedSearch.created_at.desc())
+        ).all()
+
+    return [
+        SavedSearchResponse(
+            id=s.id,
+            folder=s.folder,
+            query=s.query,
+            response=s.response,
+            sources=s.sources,
+            created_at=s.created_at.isoformat(),
+            updated_at=s.updated_at.isoformat()
+        )
+        for s in searches
+    ]
+
+
+@app.get("/saved-searches/folders")
+async def get_saved_search_folders() -> List[dict]:
+    """Get list of folders with saved search counts"""
+    if not _db:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    from .models import SavedSearch
+    from sqlalchemy import func
+
+    session = _db.session()
+
+    # Count searches by folder
+    folder_counts = session.exec(
+        select(SavedSearch.folder, func.count(SavedSearch.id))
+        .group_by(SavedSearch.folder)
+    ).all()
+
+    return [{"folder": f, "count": c} for f, c in folder_counts]
+
+
+@app.post("/saved-searches")
+async def create_saved_search(request: SavedSearchRequest) -> SavedSearchResponse:
+    """Save a search query and response"""
+    if not _db:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    from .models import SavedSearch
+    from datetime import datetime
+
+    session = _db.session()
+
+    saved = SavedSearch(
+        folder=request.folder,
+        query=request.query,
+        response=request.response,
+        sources=request.sources,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow()
+    )
+
+    session.add(saved)
+    session.commit()
+    session.refresh(saved)
+
+    return SavedSearchResponse(
+        id=saved.id,
+        folder=saved.folder,
+        query=saved.query,
+        response=saved.response,
+        sources=saved.sources,
+        created_at=saved.created_at.isoformat(),
+        updated_at=saved.updated_at.isoformat()
+    )
+
+
+@app.delete("/saved-searches/{search_id}")
+async def delete_saved_search(search_id: int):
+    """Delete a saved search"""
+    if not _db:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    from .models import SavedSearch
+
+    session = _db.session()
+
+    saved = session.get(SavedSearch, search_id)
+    if not saved:
+        raise HTTPException(status_code=404, detail="Saved search not found")
+
+    session.delete(saved)
+    session.commit()
+
+    return {"success": True, "message": "Saved search deleted"}
+
+
+@app.post("/admin/refresh-summaries")
+async def refresh_summaries():
+    """
+    Refresh pre-computed summaries.
+    Note: Summaries are defined in code (summaries.py) and reflect static data.
+    This endpoint validates that summaries are accessible and returns their status.
+    To update actual values, edit mydata/summaries.py.
+    """
+    from .summaries import SUMMARIES, get_summary
+
+    try:
+        # Validate all summaries are accessible
+        summary_status = {}
+        for name in SUMMARIES.keys():
+            summary = get_summary(name)
+            if summary:
+                summary_status[name] = "ok"
+            else:
+                summary_status[name] = "error"
+
+        return {
+            "success": True,
+            "message": f"Pre-computed summaries validated ({len(summary_status)} available)",
+            "summaries": list(summary_status.keys()),
+            "status": summary_status
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to refresh summaries: {str(e)}")

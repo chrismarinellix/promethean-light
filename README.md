@@ -1,4 +1,4 @@
-# Prometheus Light - God Mode
+# Promethean Light - God Mode
 
 ```
 ╔══════════════════════════════════════════════════════════════════════╗
@@ -16,143 +16,226 @@
 ╚══════════════════════════════════════════════════════════════════════╝
 ```
 
-A 100% local, encrypted, ML-powered personal knowledge base that ingests files, emails, and pasted text, then makes them instantly searchable with zero cloud tokens.
+A 100% local, encrypted, ML-powered personal knowledge base that ingests files, emails, and pasted text, then makes them instantly searchable with RAG-powered Q&A via Claude AI.
 
-## 🎯 What is Prometheus Light?
+## What is Promethean Light?
 
 Your personal **God Mode** for data:
 - **Paste it** → Encrypted & organized
 - **Drop files** → Auto-ingested
 - **Connect email** → Searchable archive
-- **Ask questions** → Instant semantic search
-- **100% local** → No cloud, no leaks, no costs
+- **Ask questions** → RAG-powered answers via Claude AI
+- **Desktop UI** → Native Windows/macOS/Linux app
+- **100% local storage** → Your data stays on your machine
 
-## ✨ Features
+## Features
 
-- 🔒 **Military-Grade Encryption**: Argon2id + ChaCha20-Poly1305
-- 🤖 **On-Device ML**: bge-small embeddings, HDBSCAN clustering, auto-tagging
-- 📧 **Email Ingestion**: IMAP support (Gmail, Outlook, etc.)
-- 📁 **File Watching**: Auto-ingest from Documents, Downloads, etc.
-- 🔍 **Semantic Search**: Vector similarity + metadata filtering
-- 🏷️ **Auto-Tagging**: ML-powered organization
-- 📊 **Pattern Detection**: Find trends in your data
-- ⚡ **Fast**: Sub-100ms searches, < 100 MB model
-- 💰 **Zero Cost**: No APIs, no subscriptions, no tokens
+- **RAG-Powered Chat**: Ask natural language questions, get answers with source citations
+- **Military-Grade Encryption**: Argon2id + ChaCha20-Poly1305
+- **On-Device ML**: BGE-Large embeddings (1024 dims), HDBSCAN clustering, auto-tagging
+- **Email Ingestion**: Outlook (Windows via win32com, macOS via AppleScript)
+- **File Watching**: Auto-ingest from Documents, Downloads, watched folders
+- **Semantic Search**: Vector similarity via Qdrant + metadata filtering
+- **Desktop UI**: Native Tauri app with system tray, dark theme
+- **Quick Queries**: Pre-built lozenges for Team, Projects, Emails, Analysis
+- **Voice Input**: Speech-to-text queries (Chrome/Edge)
+- **Admin Panel**: System status, database info, LLM configuration
+- **Saved Searches**: Bookmark responses to folders
 
-## 🚀 Quick Start
+## Quick Start
 
-**Installation (Windows, Linux, macOS):**
-1. Navigate to your project directory.
-2. Run the appropriate launch script, which will handle virtual environment creation and dependency installation:
+### Windows (Recommended)
 
-**Windows:**
-```powershell
-.\launch.ps1
+```batch
+# Start the full application (daemon + UI)
+START_PL2000.bat
+
+# Or for debugging:
+START_PL2000_DEBUG.bat
 ```
 
-**Linux/macOS:**
+### Manual Start
+
 ```bash
-chmod +x launch.sh && ./launch.sh
+# 1. Set your passphrase
+set MYDATA_PASSPHRASE=your_passphrase
+
+# 2. Start the daemon
+python -m mydata daemon
+
+# 3. Launch the UI (in another terminal)
+cd promethean-light-ui
+npm run tauri dev
 ```
 
-**First time setup:**
+### First Time Setup
+
 ```bash
-mydata setup  # Creates encrypted vault
-mydata daemon  # Start God Mode (will use configured settings)
+# 1. Install Python dependencies
+pip install -e .
+
+# 2. Set up encryption
+mydata setup
+
+# 3. Configure API key (for RAG chat)
+set ANTHROPIC_API_KEY=your_key_here
+
+# 4. Start the daemon
+START_PL2000.bat
 ```
 
-See [QUICKSTART.md](QUICKSTART.md) for full guide.
+See [QUICKSTART.md](QUICKSTART.md) for detailed setup guide.
 
-## ⚙️ Configuration
+## Configuration
 
-Prometheus Light uses a `.env` file for configuration. A default `.env` file is created during `mydata setup`. You can customize various settings by editing this file.
+Promethean Light uses environment variables and a `.env` file for configuration.
 
-**Example `.env` file:**
+**Required:**
+```bash
+MYDATA_PASSPHRASE=your_encryption_passphrase
+ANTHROPIC_API_KEY=your_claude_api_key  # For RAG chat
 ```
-# Prometheus Light Environment
-MYDATA_HOME=$HOME/.mydata
+
+**Optional `.env` settings:**
+```
+# Data location
+MYDATA_HOME=C:\Users\you\.mydata
 
 # Daemon Settings
 WATCH_DIRECTORIES="~/Documents,~/Downloads"
 ML_LOOP_INTERVAL_SECONDS=300
 
 # API Settings
-API_HOST="127.0.0.1"
+API_HOST=127.0.0.1
 API_PORT=8000
 
-# Email Watcher Settings (macOS Outlook example)
-MAC_OUTLOOK_POLL_INTERVAL=60
-MAC_OUTLOOK_DAYS_BACK=30
-
-# Email Watcher Settings (Windows Outlook example)
+# Email Watcher (Windows Outlook)
 WIN_OUTLOOK_HISTORY_HOURS=1440
 WIN_OUTLOOK_WATCH_SENT=True
-
-# Master passphrase (optional, for automated setups only)
-# MYDATA_PASSPHRASE="your_secret_passphrase"
 ```
 
-Refer to `mydata/settings.py` for a complete list of configurable variables and their default values.
+Refer to `mydata/settings.py` for all configurable variables.
 
-## 📖 Daily Usage
+## Using the UI
+
+The Promethean Light UI provides a visual interface:
+
+1. **Ask Tab**: Chat with your data using natural language
+   - Quick query lozenges for common questions
+   - Voice input support
+   - Save responses to folders
+
+2. **Admin Tab**: System administration
+   - View connection status
+   - Check LLM configuration
+   - Database statistics
+
+3. **Sidebar**: Navigation and stats
+   - Document/email/note counts
+   - Tag cloud
+   - Saved searches
+
+### Debugging
+
+Open DevTools (F12) to see detailed logs:
+```
+[PL 08:30:00.123] [DAEMON] Checking daemon connection...
+[PL 08:30:00.456] [API] GET /stats
+[PL 08:30:00.789] [CHAT] Sending message...
+```
+
+## CLI Usage
 
 ```bash
-# Start your session (shows retro banner)
-./launch.ps1  # Windows
-./launch.sh   # Linux/macOS
-
-# Launch God Mode daemon
-mydata daemon
+# Start daemon
+python -m mydata daemon
 
 # Add data
-echo "Important note" | mydata add --stdin
 mydata add ~/Documents/research.pdf
+echo "Important note" | mydata add --stdin
 
 # Search
-mydata ask "research findings"
-mydata ls
+mydata search "research findings"
 mydata stats
-
-# Email integration
-mydata email-add your@gmail.com
 ```
 
 ## Architecture
 
 ```
-CLI (Typer + Rich)
-    ↓
-FastAPI Server
-    ↓
-┌─────────────┬──────────────┬───────────────┐
-│   SQLite    │   Qdrant     │   ML Models   │
-│ (Encrypted) │  (Vectors)   │  (On-device)  │
-└─────────────┴──────────────┴───────────────┘
+┌─────────────────────────────────────────────────────────┐
+│              Promethean Light UI (Tauri)                │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐  │
+│  │   Chat/Ask  │  │   Sidebar   │  │   Admin Panel   │  │
+│  └─────────────┘  └─────────────┘  └─────────────────┘  │
+└──────────────────────────┬──────────────────────────────┘
+                           │ HTTP (127.0.0.1:8000)
+                           ▼
+┌─────────────────────────────────────────────────────────┐
+│                    FastAPI Server                       │
+│  /chat  /search  /stats  /add  /api-keys  /admin       │
+└──────────────────────────┬──────────────────────────────┘
+                           │
+         ┌─────────────────┼─────────────────┐
+         ▼                 ▼                 ▼
+┌─────────────┐   ┌──────────────┐   ┌───────────────┐
+│   SQLite    │   │    Qdrant    │   │   Claude AI   │
+│ (Encrypted) │   │  (Vectors)   │   │  (RAG Chat)   │
+└─────────────┘   └──────────────┘   └───────────────┘
+         │                 │
+         └────────┬────────┘
+                  ▼
+         ┌──────────────┐
+         │  BGE-Large   │
+         │  Embeddings  │
+         │  (1024 dim)  │
+         └──────────────┘
 ```
 
-## Commands
+## API Endpoints
 
-- `mydata setup` - Initialize encryption
-- `mydata daemon` - Start background services
-- `mydata add <file>` - Ingest file
-- `mydata ask <query>` - Semantic search
-- `mydata ls` - List documents
-- `mydata clusters` - Show auto-detected topics
-- `mydata email add` - Configure email ingestion
-- `mydata backup` - Create encrypted backup
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | Health check |
+| `/chat` | POST | RAG-powered Q&A |
+| `/search` | POST | Semantic search |
+| `/stats` | GET | Database statistics |
+| `/add` | POST | Add text content |
+| `/add/file` | POST | Upload file |
+| `/tags` | GET | Get all tags |
+| `/api-keys/status` | GET | Check LLM configuration |
+| `/database/info` | GET | Database details |
+| `/saved-searches` | GET/POST | Saved responses |
+
+## Troubleshooting
+
+### "Could not connect to daemon"
+1. Check daemon terminal is running
+2. Click Refresh in sidebar
+3. Restart with `START_PL2000.bat`
+
+### LLM shows "None"
+1. Set `ANTHROPIC_API_KEY` environment variable
+2. Click Refresh to re-check
+3. Check Admin panel for status
+
+### Chat returns errors
+1. Open DevTools (F12) for logs
+2. Test: `curl http://127.0.0.1:8000/chat -X POST -d "{\"message\":\"test\"}"`
+3. Check daemon terminal for Python errors
 
 ## Data Volume
 
-- **Typical laptop (16 GB RAM)**: 500k documents, 50 GB
+- **Typical usage**: 10k+ documents
 - **Search latency**: < 100 ms
-- **Embedding size**: 384 dimensions (33 MB model)
+- **Embedding model**: BGE-Large (1024 dimensions)
+- **Database**: SQLite + Qdrant (local)
 
 ## Security
 
 - Master key derived with Argon2id
 - SQLite encrypted with ChaCha20-Poly1305
-- Embeddings encrypted before storage
-- No plaintext on disk (except during active processing)
+- All data stored locally
+- API key stored in environment (not in code)
 
 ## License
 

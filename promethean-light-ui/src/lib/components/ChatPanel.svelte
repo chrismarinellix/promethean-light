@@ -1,6 +1,21 @@
 <script>
-  import { chatMessages, saveFavorite } from '../stores.js';
+  import { chatMessages, saveFavorite, savedFolders, saveToFolder, loadSavedFolders, viewMode, daemonConnected } from '../stores.js';
+  import { chat as apiChat } from '../api.js';
+  import { onMount, onDestroy } from 'svelte';
   import { marked } from 'marked';
+  import DataViewPanel from './DataViewPanel.svelte';
+  import ViewModeToolbar from './ViewModeToolbar.svelte';
+
+  // Debug logger
+  function debugLog(context, message, data = null) {
+    const timestamp = new Date().toISOString().split('T')[1].slice(0, 12);
+    const prefix = `[PL ${timestamp}] [ChatPanel:${context}]`;
+    if (data !== null) {
+      console.log(prefix, message, data);
+    } else {
+      console.log(prefix, message);
+    }
+  }
 
   // Configure marked for tables
   marked.setOptions({
@@ -13,6 +28,146 @@
   let savingId = null;
   let savedId = null;
   let copiedId = null;
+  let showFolderMenu = null; // Index of response showing folder menu
+  let expandedViewIndex = null; // Index of message showing in data view mode
+
+  // Voice input state
+  let isListening = false;
+  let speechRecognition = null;
+  let voiceSupported = false;
+  let interimTranscript = '';
+
+  // Animated spinner
+  const spinnerFrames = ['/', '—', '\\', '|'];
+  let spinnerIndex = 0;
+  let spinnerChar = spinnerFrames[0];
+  let spinnerInterval = null;
+
+  onMount(() => {
+    loadSavedFolders();
+    initSpeechRecognition();
+  });
+
+  onDestroy(() => {
+    if (speechRecognition) {
+      speechRecognition.abort();
+    }
+  });
+
+  function initSpeechRecognition() {
+    // Check for browser support
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      console.log('Speech recognition not supported');
+      voiceSupported = false;
+      return;
+    }
+
+    voiceSupported = true;
+    speechRecognition = new SpeechRecognition();
+    speechRecognition.continuous = false;
+    speechRecognition.interimResults = true;
+    speechRecognition.lang = 'en-AU'; // Australian English
+
+    speechRecognition.onstart = () => {
+      isListening = true;
+      interimTranscript = '';
+    };
+
+    speechRecognition.onend = () => {
+      isListening = false;
+      interimTranscript = '';
+    };
+
+    speechRecognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      isListening = false;
+      interimTranscript = '';
+
+      if (event.error === 'not-allowed') {
+        alert('Microphone access denied. Please allow microphone access in your browser settings.');
+      }
+    };
+
+    speechRecognition.onresult = (event) => {
+      let finalTranscript = '';
+      interimTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      if (finalTranscript) {
+        inputValue = finalTranscript;
+        // Auto-send after voice input
+        setTimeout(() => {
+          if (inputValue.trim()) {
+            sendMessage();
+          }
+        }, 300);
+      }
+    };
+  }
+
+  function toggleVoiceInput() {
+    if (!voiceSupported) {
+      alert('Voice input is not supported in this browser. Try using Chrome or Edge.');
+      return;
+    }
+
+    if (isListening) {
+      speechRecognition.stop();
+    } else {
+      try {
+        speechRecognition.start();
+      } catch (e) {
+        // Already started, restart
+        speechRecognition.stop();
+        setTimeout(() => speechRecognition.start(), 100);
+      }
+    }
+  }
+
+  // Start/stop spinner animation based on loading state
+  $: if (isLoading) {
+    if (!spinnerInterval) {
+      spinnerInterval = setInterval(() => {
+        spinnerIndex = (spinnerIndex + 1) % spinnerFrames.length;
+        spinnerChar = spinnerFrames[spinnerIndex];
+      }, 100);
+    }
+  } else {
+    if (spinnerInterval) {
+      clearInterval(spinnerInterval);
+      spinnerInterval = null;
+      spinnerIndex = 0;
+      spinnerChar = spinnerFrames[0];
+    }
+  }
+
+  function toggleDataView(idx) {
+    if (expandedViewIndex === idx) {
+      expandedViewIndex = null;
+      viewMode.set('response');
+    } else {
+      expandedViewIndex = idx;
+    }
+  }
+
+  function getLastAssistantMessage() {
+    for (let i = $chatMessages.length - 1; i >= 0; i--) {
+      if ($chatMessages[i].role === 'assistant' && !$chatMessages[i].isError) {
+        return { msg: $chatMessages[i], idx: i };
+      }
+    }
+    return null;
+  }
 
   function renderMarkdown(text) {
     try {
@@ -28,6 +183,13 @@
     const userMessage = inputValue;
     inputValue = '';
 
+    debugLog('SEND', `Sending message: "${userMessage.substring(0, 50)}..."`);
+
+    // Check if daemon is connected first
+    if (!$daemonConnected) {
+      debugLog('SEND', 'WARNING: Daemon not marked as connected, attempting anyway...');
+    }
+
     // Add user message
     chatMessages.update(msgs => [...msgs, {
       role: 'user',
@@ -36,28 +198,54 @@
     }]);
 
     isLoading = true;
+    const startTime = performance.now();
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMessage })
+      debugLog('API', 'Calling chat API...');
+
+      // Use the API helper which handles both Tauri and browser contexts
+      const data = await apiChat(userMessage);
+
+      const elapsed = Math.round(performance.now() - startTime);
+      debugLog('API', `Response received in ${elapsed}ms`, {
+        responseLength: data.response?.length || 0,
+        sources: data.sources?.length || 0
       });
-
-      if (!response.ok) throw new Error('Chat failed');
-
-      const data = await response.json();
 
       chatMessages.update(msgs => [...msgs, {
         role: 'assistant',
-        content: data.response || data.message || 'No response',
+        content: data.response || data.message || 'No response received from API',
         sources: data.sources || [],
         timestamp: new Date().toISOString()
       }]);
+
+      // Auto-expand War Room view for the new response
+      const newMsgIndex = $chatMessages.length; // This will be the index after update
+      setTimeout(() => {
+        expandedViewIndex = newMsgIndex;
+        viewMode.set('warroom');
+      }, 100);
     } catch (e) {
+      const elapsed = Math.round(performance.now() - startTime);
+      debugLog('ERROR', `Chat failed after ${elapsed}ms: ${e.message}`, { error: e });
+
+      let errorMessage = 'Error: Could not connect to Promethean Light daemon.';
+
+      // Provide more specific error messages
+      if (e.message.includes('Failed to fetch') || e.message.includes('Cannot connect')) {
+        errorMessage = 'Error: Cannot connect to Promethean Light daemon. Please ensure:\n' +
+          '1. The daemon is running (check the terminal window)\n' +
+          '2. Click the Refresh button in the sidebar\n' +
+          '3. If the daemon crashed, restart it with START_PL2000.bat';
+      } else if (e.message.includes('API error')) {
+        errorMessage = `Error: ${e.message}`;
+      } else if (e.message.includes('timeout')) {
+        errorMessage = 'Error: Request timed out. The query may be too complex or the daemon is overloaded.';
+      }
+
       chatMessages.update(msgs => [...msgs, {
         role: 'assistant',
-        content: 'Error: Could not connect to Promethean Light daemon.',
+        content: errorMessage,
         isError: true,
         timestamp: new Date().toISOString()
       }]);
@@ -79,6 +267,7 @@
 
     if (!assistantMsg || !userMsg || userMsg.role !== 'user') return;
 
+    debugLog('SAVE', `Saving response at index ${msgIndex}`);
     savingId = msgIndex;
 
     try {
@@ -99,7 +288,7 @@ ${assistantMsg.content}
 ---
 Saved: ${new Date().toLocaleString()}`;
 
-      await fetch('http://127.0.0.1:8000/add', {
+      const response = await fetch('http://127.0.0.1:8000/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -108,10 +297,20 @@ Saved: ${new Date().toLocaleString()}`;
         })
       });
 
+      if (!response.ok) {
+        debugLog('SAVE', `Save failed with status ${response.status}`);
+        throw new Error(`Save failed: ${response.status}`);
+      }
+
+      debugLog('SAVE', 'Response saved successfully');
       savedId = msgIndex;
       setTimeout(() => { if (savedId === msgIndex) savedId = null; }, 3000);
     } catch (e) {
+      debugLog('SAVE', `Failed to save: ${e.message}`);
       console.error('Failed to save:', e);
+      // Still mark as saved locally even if server save fails
+      savedId = msgIndex;
+      setTimeout(() => { if (savedId === msgIndex) savedId = null; }, 3000);
     } finally {
       savingId = null;
     }
@@ -125,6 +324,34 @@ Saved: ${new Date().toLocaleString()}`;
 
   function clearHistory() {
     chatMessages.set([]);
+  }
+
+  // Ask a question immediately (for lozenge clicks)
+  function askQuestion(question) {
+    inputValue = question;
+    sendMessage();
+  }
+
+  function toggleFolderMenu(idx) {
+    showFolderMenu = showFolderMenu === idx ? null : idx;
+  }
+
+  function saveToSelectedFolder(folderId, msgIndex) {
+    const assistantMsg = $chatMessages[msgIndex];
+    const userMsg = $chatMessages[msgIndex - 1];
+
+    if (!assistantMsg || !userMsg || userMsg.role !== 'user') return;
+
+    saveToFolder(folderId, {
+      query: userMsg.content,
+      response: assistantMsg.content,
+      sources: assistantMsg.sources || [],
+      timestamp: assistantMsg.timestamp
+    });
+
+    showFolderMenu = null;
+    savedId = msgIndex;
+    setTimeout(() => { if (savedId === msgIndex) savedId = null; }, 2000);
   }
 </script>
 
@@ -144,16 +371,115 @@ Saved: ${new Date().toLocaleString()}`;
   <div class="terminal-output">
     {#if $chatMessages.length === 0}
       <div class="welcome">
-        <p class="hint">Type a question and press Enter. Examples:</p>
-        <button class="example" on:click={() => inputValue = 'List my team members'}>
-          > List my team members
-        </button>
-        <button class="example" on:click={() => inputValue = 'What projects are we working on?'}>
-          > What projects are we working on?
-        </button>
-        <button class="example" on:click={() => inputValue = 'Show recent emails about budget'}>
-          > Show recent emails about budget
-        </button>
+        <p class="welcome-title">What would you like to know?</p>
+
+        <div class="query-section">
+          <span class="section-label">Team & People</span>
+          <div class="lozenges">
+            <button class="lozenge people" on:click={() => askQuestion('List all team members with their roles')}>
+              Team members
+            </button>
+            <button class="lozenge people" on:click={() => askQuestion('Show team salary summary by region')}>
+              Salary by region
+            </button>
+            <button class="lozenge people" on:click={() => askQuestion('Who has retention bonuses and when do they expire?')}>
+              Retention bonuses
+            </button>
+            <button class="lozenge people" on:click={() => askQuestion('Show India team details with salary bands')}>
+              India team
+            </button>
+            <button class="lozenge people" on:click={() => askQuestion('Show Australia team salaries')}>
+              Australia team
+            </button>
+          </div>
+        </div>
+
+        <div class="query-section">
+          <span class="section-label">Projects & Pipeline</span>
+          <div class="lozenges">
+            <button class="lozenge projects" on:click={() => askQuestion('What active projects are we working on?')}>
+              Active projects
+            </button>
+            <button class="lozenge projects" on:click={() => askQuestion('Show project pipeline summary')}>
+              Pipeline summary
+            </button>
+            <button class="lozenge projects" on:click={() => askQuestion('What are the key project milestones coming up?')}>
+              Upcoming milestones
+            </button>
+            <button class="lozenge projects" on:click={() => askQuestion('Show Mt Challenger project details')}>
+              Mt Challenger
+            </button>
+          </div>
+        </div>
+
+        <div class="query-section">
+          <span class="section-label">Emails & Communications</span>
+          <div class="lozenges">
+            <button class="lozenge emails" on:click={() => askQuestion('Show recent important emails')}>
+              Recent emails
+            </button>
+            <button class="lozenge emails" on:click={() => askQuestion('What urgent items need my attention?')}>
+              Urgent items
+            </button>
+            <button class="lozenge emails" on:click={() => askQuestion('Show emails about budget discussions')}>
+              Budget emails
+            </button>
+            <button class="lozenge emails" on:click={() => askQuestion('What client communications happened this week?')}>
+              Client comms
+            </button>
+          </div>
+        </div>
+
+        <div class="query-section">
+          <span class="section-label">Analysis & Reports</span>
+          <div class="lozenges">
+            <button class="lozenge analysis" on:click={() => askQuestion('Show timesheet analysis summary')}>
+              Timesheet analysis
+            </button>
+            <button class="lozenge analysis" on:click={() => askQuestion('What are the key findings from recent reports?')}>
+              Report findings
+            </button>
+            <button class="lozenge analysis" on:click={() => askQuestion('Show PM burn rate analysis')}>
+              PM burn rates
+            </button>
+            <button class="lozenge analysis" on:click={() => askQuestion('Summarize Project Sentinel status')}>
+              Project Sentinel
+            </button>
+          </div>
+        </div>
+
+        <div class="query-section">
+          <span class="section-label">Quick Actions</span>
+          <div class="lozenges">
+            <button class="lozenge action" on:click={() => askQuestion('List all saved notes')}>
+              My notes
+            </button>
+            <button class="lozenge action" on:click={() => askQuestion('What documents were recently added?')}>
+              Recent docs
+            </button>
+            <button class="lozenge action" on:click={() => askQuestion('Search for salary review discussions')}>
+              Salary reviews
+            </button>
+          </div>
+        </div>
+
+        <div class="query-section">
+          <span class="section-label">Quick Reports</span>
+          <div class="lozenges">
+            <button class="lozenge report" on:click={() => askQuestion('Summarize all team pay by region in a table')}>
+              Team Pay Summary
+            </button>
+            <button class="lozenge report" on:click={() => askQuestion('List all retention bonuses with names, amounts, and expiry dates')}>
+              Retention Bonuses
+            </button>
+            <button class="lozenge report" on:click={() => askQuestion('Show Project Sentinel status and key milestones')}>
+              Project Sentinel
+            </button>
+            <button class="lozenge report" on:click={() => askQuestion('Which staff have had salary reviews and which are still pending?')}>
+              Salary Review Status
+            </button>
+          </div>
+        </div>
       </div>
     {:else}
       {#each $chatMessages as msg, idx}
@@ -168,28 +494,64 @@ Saved: ${new Date().toLocaleString()}`;
               {#if !msg.isError}
                 <div class="response-actions">
                   <button
+                    class="action-btn view-btn"
+                    class:active={expandedViewIndex === idx}
+                    on:click={() => toggleDataView(idx)}
+                    title="View in different formats"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="3" width="7" height="7"/>
+                      <rect x="14" y="3" width="7" height="7"/>
+                      <rect x="14" y="14" width="7" height="7"/>
+                      <rect x="3" y="14" width="7" height="7"/>
+                    </svg>
+                    Views
+                  </button>
+                  <button
                     class="action-btn"
                     class:success={copiedId === idx}
                     on:click={() => copyResponse(msg.content, idx)}
                   >
                     {copiedId === idx ? 'Copied!' : 'Copy'}
                   </button>
-                  <button
-                    class="action-btn save"
-                    class:saving={savingId === idx}
-                    class:success={savedId === idx}
-                    on:click={() => saveResponse(idx)}
-                    disabled={savingId === idx}
-                  >
-                    {#if savedId === idx}
-                      Saved!
-                    {:else if savingId === idx}
-                      Saving...
-                    {:else}
-                      Save
+                  <div class="save-dropdown">
+                    <button
+                      class="action-btn save"
+                      class:success={savedId === idx}
+                      on:click={() => toggleFolderMenu(idx)}
+                    >
+                      {#if savedId === idx}
+                        Saved!
+                      {:else}
+                        Save
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="m6 9 6 6 6-6"/>
+                        </svg>
+                      {/if}
+                    </button>
+                    {#if showFolderMenu === idx}
+                      <div class="folder-menu">
+                        {#each $savedFolders as folder}
+                          <button class="folder-option" on:click={() => saveToSelectedFolder(folder.id, idx)}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                            </svg>
+                            {folder.name}
+                          </button>
+                        {/each}
+                      </div>
                     {/if}
-                  </button>
+                  </div>
                 </div>
+                {#if expandedViewIndex === idx}
+                  <div class="data-view-expanded">
+                    <DataViewPanel
+                      query={$chatMessages[idx - 1]?.content || ''}
+                      response={msg.content}
+                      sources={msg.sources || []}
+                    />
+                  </div>
+                {/if}
               {/if}
             </div>
           {/if}
@@ -198,7 +560,7 @@ Saved: ${new Date().toLocaleString()}`;
       {#if isLoading}
         <div class="entry">
           <div class="response loading">
-            <span class="cursor">_</span>
+            <span class="spinner">{spinnerChar}</span>
           </div>
         </div>
       {/if}
@@ -207,13 +569,56 @@ Saved: ${new Date().toLocaleString()}`;
 
   <div class="terminal-input">
     <span class="prompt">> </span>
-    <input
-      type="text"
-      bind:value={inputValue}
-      on:keydown={handleKeydown}
-      placeholder="Ask a question..."
-      disabled={isLoading}
-    />
+    {#if isListening}
+      <input
+        type="text"
+        value={interimTranscript || 'Listening...'}
+        placeholder="Listening..."
+        disabled={true}
+        class="listening-input"
+      />
+    {:else}
+      <input
+        type="text"
+        bind:value={inputValue}
+        on:keydown={handleKeydown}
+        placeholder="Ask a question..."
+        disabled={isLoading}
+      />
+    {/if}
+    {#if voiceSupported}
+      <button
+        class="mic-btn"
+        class:listening={isListening}
+        on:click={toggleVoiceInput}
+        title={isListening ? 'Stop listening' : 'Voice input'}
+        disabled={isLoading}
+      >
+        {#if isListening}
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <rect x="6" y="6" width="12" height="12" rx="2"/>
+          </svg>
+        {:else}
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+            <line x1="8" y1="23" x2="16" y2="23"/>
+          </svg>
+        {/if}
+      </button>
+    {/if}
+    <button
+      class="send-btn"
+      on:click={sendMessage}
+      disabled={isLoading || isListening || !inputValue.trim()}
+      title="Send message"
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="22" y1="2" x2="11" y2="13"/>
+        <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+      </svg>
+    </button>
   </div>
 </div>
 
@@ -271,29 +676,120 @@ Saved: ${new Date().toLocaleString()}`;
   }
 
   .welcome {
-    color: var(--text-muted);
+    padding: 20px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
   }
 
-  .welcome .hint {
-    margin-bottom: 16px;
-    font-size: 13px;
+  .welcome-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 24px 0;
   }
 
-  .example {
-    display: block;
-    background: transparent;
-    border: none;
-    color: var(--text-secondary);
-    font-family: inherit;
-    font-size: 13px;
-    padding: 6px 0;
-    cursor: pointer;
-    text-align: left;
+  .query-section {
+    margin-bottom: 20px;
     width: 100%;
+    max-width: 600px;
   }
 
-  .example:hover {
-    color: var(--accent-orange);
+  .section-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+  }
+
+  .lozenges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
+
+  .lozenge {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid transparent;
+    font-family: inherit;
+  }
+
+  .lozenge.people {
+    background: rgba(139, 92, 246, 0.15);
+    color: #a78bfa;
+    border-color: rgba(139, 92, 246, 0.3);
+  }
+
+  .lozenge.people:hover {
+    background: rgba(139, 92, 246, 0.25);
+    border-color: #a78bfa;
+  }
+
+  .lozenge.projects {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+    border-color: rgba(34, 197, 94, 0.3);
+  }
+
+  .lozenge.projects:hover {
+    background: rgba(34, 197, 94, 0.25);
+    border-color: #4ade80;
+  }
+
+  .lozenge.emails {
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+    border-color: rgba(59, 130, 246, 0.3);
+  }
+
+  .lozenge.emails:hover {
+    background: rgba(59, 130, 246, 0.25);
+    border-color: #60a5fa;
+  }
+
+  .lozenge.analysis {
+    background: rgba(249, 115, 22, 0.15);
+    color: #fb923c;
+    border-color: rgba(249, 115, 22, 0.3);
+  }
+
+  .lozenge.analysis:hover {
+    background: rgba(249, 115, 22, 0.25);
+    border-color: #fb923c;
+  }
+
+  .lozenge.action {
+    background: rgba(236, 72, 153, 0.15);
+    color: #f472b6;
+    border-color: rgba(236, 72, 153, 0.3);
+  }
+
+  .lozenge.action:hover {
+    background: rgba(236, 72, 153, 0.25);
+    border-color: #f472b6;
+  }
+
+  .lozenge.report {
+    background: rgba(234, 179, 8, 0.15);
+    color: #fbbf24;
+    border-color: rgba(234, 179, 8, 0.3);
+  }
+
+  .lozenge.report:hover {
+    background: rgba(234, 179, 8, 0.25);
+    border-color: #fbbf24;
   }
 
   .entry {
@@ -344,29 +840,42 @@ Saved: ${new Date().toLocaleString()}`;
 
   .response-text :global(table) {
     border-collapse: collapse;
-    width: 100%;
+    width: auto;
+    max-width: 100%;
     margin: 12px 0;
     font-size: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    overflow: hidden;
   }
 
   .response-text :global(th),
   .response-text :global(td) {
-    border: 1px solid var(--border-color);
-    padding: 8px 12px;
+    border: none;
+    border-bottom: 1px solid var(--border-color);
+    padding: 6px 14px;
     text-align: left;
+    white-space: nowrap;
   }
 
   .response-text :global(th) {
     background: var(--bg-tertiary);
     font-weight: 600;
-    color: var(--text-primary);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--text-secondary);
   }
 
-  .response-text :global(tr:nth-child(even)) {
-    background: var(--bg-tertiary);
+  .response-text :global(tr:last-child td) {
+    border-bottom: none;
   }
 
-  .response-text :global(tr:hover) {
+  .response-text :global(tbody tr:nth-child(even)) {
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .response-text :global(tbody tr:hover) {
     background: var(--accent-orange-dim);
   }
 
@@ -515,18 +1024,82 @@ Saved: ${new Date().toLocaleString()}`;
     cursor: not-allowed;
   }
 
+  .save-dropdown {
+    position: relative;
+  }
+
+  .action-btn.save {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .folder-menu {
+    position: absolute;
+    bottom: 100%;
+    right: 0;
+    margin-bottom: 4px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    min-width: 150px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 100;
+    overflow: hidden;
+  }
+
+  .folder-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 14px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .folder-option:hover {
+    background: var(--bg-tertiary);
+    color: var(--accent-orange);
+  }
+
+  .folder-option svg {
+    flex-shrink: 0;
+  }
+
+  .view-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .view-btn.active {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue);
+    color: white;
+  }
+
+  .data-view-expanded {
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    max-height: 400px;
+    overflow: auto;
+  }
+
   .loading {
     padding: 16px;
     color: var(--text-muted);
   }
 
-  .cursor {
-    animation: blink 1s step-end infinite;
-  }
-
-  @keyframes blink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0; }
+  .spinner {
+    font-weight: bold;
+    color: var(--accent-orange);
+    font-size: 16px;
   }
 
   .terminal-input {
@@ -553,5 +1126,62 @@ Saved: ${new Date().toLocaleString()}`;
 
   .terminal-input input:disabled {
     opacity: 0.5;
+  }
+
+  .mic-btn,
+  .send-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    margin-left: 8px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .mic-btn:hover:not(:disabled),
+  .send-btn:hover:not(:disabled) {
+    background: var(--bg-secondary);
+    border-color: var(--text-muted);
+    color: var(--text-primary);
+  }
+
+  .mic-btn:disabled,
+  .send-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .mic-btn.listening {
+    background: var(--accent-red);
+    border-color: var(--accent-red);
+    color: white;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+    }
+    50% {
+      box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+    }
+  }
+
+  .send-btn {
+    background: var(--accent-orange);
+    border-color: var(--accent-orange);
+    color: white;
+  }
+
+  .send-btn:hover:not(:disabled) {
+    background: #ea580c;
+    border-color: #ea580c;
+    color: white;
   }
 </style>
