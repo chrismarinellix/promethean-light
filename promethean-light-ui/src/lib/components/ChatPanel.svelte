@@ -815,7 +815,7 @@ Saved: ${new Date().toLocaleString()}`;
     flex-direction: column;
     height: 100%;
     background: var(--bg-primary);
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-family: 'Segoe UI', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   }
 
   .terminal-header {
@@ -1100,8 +1100,9 @@ Saved: ${new Date().toLocaleString()}`;
 
   .query {
     color: var(--accent-orange);
-    font-size: 16px;
-    margin-bottom: 10px;
+    font-size: 18px;
+    margin-bottom: 12px;
+    font-weight: 500;
   }
 
   .prompt {
@@ -1119,13 +1120,14 @@ Saved: ${new Date().toLocaleString()}`;
 
   .response-text {
     margin: 0;
-    padding: 20px;
-    font-size: 17px;
-    line-height: 1.75;
+    padding: 24px;
+    font-size: 18px;
+    line-height: 1.8;
     color: var(--text-primary);
     word-wrap: break-word;
-    font-family: inherit;
+    font-family: 'Segoe UI', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     overflow-x: auto;
+    letter-spacing: 0.01em;
   }
 
   .response-text :global(p) {
@@ -1413,8 +1415,8 @@ Saved: ${new Date().toLocaleString()}`;
     background: transparent;
     border: none;
     color: var(--text-primary);
-    font-family: inherit;
-    font-size: 16px;
+    font-family: 'Segoe UI', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 18px;
     outline: none;
   }
 
