@@ -65,7 +65,11 @@ async function apiFetch(endpoint, options = {}) {
   }
 }
 
-// Check daemon health
+// Check daemon health with retry logic for stability
+let lastCheckResult = false;
+let consecutiveFailures = 0;
+const MAX_FAILURES_BEFORE_DISCONNECT = 3; // Require 3 consecutive failures before showing disconnected
+
 export async function checkDaemon() {
   debugLog('DAEMON', 'Checking daemon health...');
   try {
@@ -74,17 +78,45 @@ export async function checkDaemon() {
       const { invoke } = await import('@tauri-apps/api/core');
       const result = await invoke('check_daemon');
       debugLog('DAEMON', `Tauri check result: ${result}`);
-      return result;
+      if (result) {
+        consecutiveFailures = 0;
+        lastCheckResult = true;
+      } else {
+        consecutiveFailures++;
+      }
+      // Only report disconnected after consecutive failures
+      if (consecutiveFailures >= MAX_FAILURES_BEFORE_DISCONNECT) {
+        lastCheckResult = false;
+      }
+      return lastCheckResult;
     }
-    // Browser fallback - check /stats endpoint
+    // Browser fallback - use root endpoint for faster check
     debugLog('DAEMON', 'Using HTTP fallback for daemon check');
-    const data = await apiFetch('/stats');
-    const connected = data && data.total_documents !== undefined;
-    debugLog('DAEMON', `HTTP check result: ${connected}`, data);
-    return connected;
+    const response = await fetch(`${API_BASE}/`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(5000) // 5 second timeout
+    });
+    const connected = response.ok;
+    debugLog('DAEMON', `HTTP check result: ${connected}`);
+    if (connected) {
+      consecutiveFailures = 0;
+      lastCheckResult = true;
+    } else {
+      consecutiveFailures++;
+    }
+    // Only report disconnected after consecutive failures
+    if (consecutiveFailures >= MAX_FAILURES_BEFORE_DISCONNECT) {
+      lastCheckResult = false;
+    }
+    return lastCheckResult;
   } catch (e) {
     debugLog('DAEMON', `Check failed: ${e.message}`);
-    return false;
+    consecutiveFailures++;
+    // Only report disconnected after consecutive failures
+    if (consecutiveFailures >= MAX_FAILURES_BEFORE_DISCONNECT) {
+      lastCheckResult = false;
+    }
+    return lastCheckResult;
   }
 }
 

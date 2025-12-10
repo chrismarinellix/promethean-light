@@ -63,6 +63,7 @@ class StatsResponse(BaseModel):
     total_tags: int
     total_clusters: int
     sources: Optional[SourceStats] = None
+    last_email_at: Optional[str] = None  # ISO timestamp of most recent email
 
 
 # Create FastAPI app
@@ -71,7 +72,7 @@ app = FastAPI(title="MyData API", version="0.1.0")
 # Add CORS middleware to allow requests from Tauri dev server
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "tauri://localhost"],
+    allow_origins=["*"],  # Allow all origins for local development
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -370,14 +371,20 @@ async def get_stats() -> StatsResponse:
     total_clusters = len(session.exec(select(Cluster)).all())
     total_chunks = _vectordb.count() if _vectordb else 0
 
-    # Count by source type
+    # Count by source type and track most recent email
     emails = 0
     docs = 0
     notes = 0
+    last_email_at = None
+
     for doc in documents:
         source = doc.source.lower() if doc.source else ""
         if "email" in source or "@" in source or "outlook" in source or source.startswith("/o="):
             emails += 1
+            # Track most recent email
+            if doc.created_at:
+                if last_email_at is None or doc.created_at > last_email_at:
+                    last_email_at = doc.created_at
         elif source in ("api", "paste", "note", "text", "saved-chat", "saved-response") or source.startswith("note:"):
             notes += 1
         else:
@@ -392,7 +399,8 @@ async def get_stats() -> StatsResponse:
             "emails": emails,
             "documents": docs,
             "notes": notes,
-        }
+        },
+        "last_email_at": last_email_at.isoformat() if last_email_at else None,
     }
 
     # Cache for 5 minutes
@@ -484,20 +492,26 @@ async def rebuild_clusters(min_cluster_size: int = 10, min_samples: int = 5):
         raise HTTPException(status_code=503, detail="Database or embedder not available")
 
     from .ml_organizer import MLOrganizer
+    import traceback
 
-    session = _db.session()
-    organizer = MLOrganizer(_embedder, session)
+    try:
+        session = _db.session()
+        organizer = MLOrganizer(_embedder, session)
 
-    # Force has_changes to trigger clustering
-    organizer._last_doc_count = -1
+        # Force has_changes to trigger clustering
+        organizer._last_doc_count = -1
 
-    result = organizer.run_clustering(min_cluster_size=min_cluster_size, min_samples=min_samples)
+        result = organizer.run_clustering(min_cluster_size=min_cluster_size, min_samples=min_samples)
 
-    return {
-        "status": result.get("status", "unknown"),
-        "clusters": result.get("clusters", 0),
-        "message": f"Created {result.get('clusters', 0)} clusters from {result.get('doc_count', 0)} documents"
-    }
+        return {
+            "status": result.get("status", "unknown"),
+            "clusters": result.get("clusters", 0),
+            "message": f"Created {result.get('clusters', 0)} clusters from {result.get('doc_count', 0)} documents"
+        }
+    except Exception as e:
+        print(f"[API] Cluster rebuild failed: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Clustering failed: {str(e)}")
 
 
 @app.get("/dashboard/stats")

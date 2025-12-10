@@ -29,7 +29,7 @@ class Embedder:
                 from sentence_transformers import SentenceTransformer
 
                 self._model = SentenceTransformer(self.model_name, cache_folder=str(self.cache_dir))
-                print(f"✓ Model loaded: {self.model_name} ({self.dimension} dims)")
+                print(f"[OK] Model loaded: {self.model_name} ({self.dimension} dims)")
             except Exception as e:
                 print(f"Error loading model: {e}")
                 raise

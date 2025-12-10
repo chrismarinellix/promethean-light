@@ -56,7 +56,7 @@ class MLOrganizer:
 
             # Only print details if there are changes
             if has_changes:
-                print(f"[ML] [{timestamp}] 📊 Database activity detected:")
+                print(f"[ML] [{timestamp}] Database activity detected:")
 
                 if doc_count != self._last_doc_count:
                     diff = doc_count - self._last_doc_count
@@ -84,32 +84,37 @@ class MLOrganizer:
                 self._last_tag_count = tag_count
 
         except Exception as e:
-            print(f"[ML] [{timestamp}] ⚠ Warning: Could not fetch stats: {e}")
+            print(f"[ML] [{timestamp}] Warning: Could not fetch stats: {e}")
             doc_count = 0
             has_changes = False
 
         # Check if clustering is available
         if not CLUSTERING_AVAILABLE:
             if has_changes:
-                print(f"[ML] [{timestamp}] ℹ Using tag-based organization (HDBSCAN/UMAP not installed)")
+                print(f"[ML] [{timestamp}] Using tag-based organization (HDBSCAN/UMAP not installed)")
             return {"status": "skipped", "reason": "missing dependencies", "has_changes": has_changes}
 
         if has_changes:
             print(f"[ML] [{timestamp}] HDBSCAN/UMAP available - running clustering...")
 
-        # Only run full clustering if there are enough documents and changes
-        if doc_count >= min_cluster_size and has_changes:
+        # Run clustering if there are enough documents AND (changes OR no clusters exist)
+        needs_clustering = has_changes or cluster_count == 0
+        if doc_count >= min_cluster_size and needs_clustering:
+            if cluster_count == 0 and not has_changes:
+                print(f"[ML] [{timestamp}] No clusters exist yet - running initial clustering...")
             try:
                 new_clusters = self._perform_clustering(min_cluster_size, min_samples, timestamp)
                 cluster_count = new_clusters
             except Exception as e:
-                print(f"[ML] [{timestamp}] ⚠ Clustering failed: {e}")
+                print(f"[ML] [{timestamp}] Clustering failed: {e}")
+                import traceback
+                traceback.print_exc()
 
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
 
         if has_changes:
-            print(f"[ML] [{timestamp}] ✓ Analysis complete in {duration:.2f}s - {cluster_count} clusters")
+            print(f"[ML] [{timestamp}] Analysis complete in {duration:.2f}s - {cluster_count} clusters")
 
         return {
             "status": "ok",
@@ -158,19 +163,28 @@ class MLOrganizer:
 
         print(f"[ML] [{timestamp}] Got {len(doc_embeddings)} embeddings, reducing dimensions...")
 
-        # Step 2: Reduce dimensions with UMAP (1024 -> 10-15 dimensions)
+        # Step 2: Reduce dimensions (1024 -> 10-15 dimensions)
         embeddings_array = np.array(doc_embeddings)
 
-        # UMAP for dimensionality reduction
-        n_neighbors = min(15, len(doc_embeddings) - 1)
-        reducer = umap.UMAP(
-            n_components=min(10, len(doc_embeddings) - 1),
-            n_neighbors=n_neighbors,
-            min_dist=0.1,
-            metric='cosine',
-            random_state=42
-        )
-        reduced_embeddings = reducer.fit_transform(embeddings_array)
+        # Try UMAP first, fall back to PCA if numba fails on Windows
+        try:
+            n_neighbors = min(15, len(doc_embeddings) - 1)
+            reducer = umap.UMAP(
+                n_components=min(10, len(doc_embeddings) - 1),
+                n_neighbors=n_neighbors,
+                min_dist=0.1,
+                metric='cosine',
+                random_state=42
+            )
+            reduced_embeddings = reducer.fit_transform(embeddings_array)
+            print(f"[ML] [{timestamp}] Reduced dimensions with UMAP")
+        except Exception as umap_err:
+            print(f"[ML] [{timestamp}] UMAP failed ({umap_err}), using PCA fallback...")
+            from sklearn.decomposition import PCA
+            n_components = min(10, len(doc_embeddings) - 1, embeddings_array.shape[1])
+            pca = PCA(n_components=n_components, random_state=42)
+            reduced_embeddings = pca.fit_transform(embeddings_array)
+            print(f"[ML] [{timestamp}] Reduced dimensions with PCA")
 
         print(f"[ML] [{timestamp}] Running HDBSCAN clustering...")
 
@@ -223,9 +237,9 @@ class MLOrganizer:
 
         try:
             self.db.commit()
-            print(f"[ML] [{timestamp}] ✓ Saved {num_clusters} clusters to database")
+            print(f"[ML] [{timestamp}] Saved {num_clusters} clusters to database")
         except Exception as e:
-            print(f"[ML] [{timestamp}] ⚠ Failed to save clusters: {e}")
+            print(f"[ML] [{timestamp}] Failed to save clusters: {e}")
             self.db.rollback()
 
         return num_clusters

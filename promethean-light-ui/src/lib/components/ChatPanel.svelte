@@ -31,6 +31,13 @@
   let showFolderMenu = null; // Index of response showing folder menu
   let expandedViewIndex = null; // Index of message showing in data view mode
 
+  // Add note modal state
+  let showAddNoteModal = false;
+  let noteContext = ''; // Context from the conversation
+  let noteText = '';
+  let isSavingNote = false;
+  let noteSaved = false;
+
   // Voice input state
   let isListening = false;
   let speechRecognition = null;
@@ -353,6 +360,59 @@ Saved: ${new Date().toLocaleString()}`;
     savedId = msgIndex;
     setTimeout(() => { if (savedId === msgIndex) savedId = null; }, 2000);
   }
+
+  function openAddNoteWithContext(msgIndex) {
+    const assistantMsg = $chatMessages[msgIndex];
+    const userMsg = $chatMessages[msgIndex - 1];
+
+    if (userMsg && assistantMsg) {
+      noteContext = `Re: "${userMsg.content.substring(0, 100)}${userMsg.content.length > 100 ? '...' : ''}"`;
+    } else {
+      noteContext = '';
+    }
+    noteText = '';
+    noteSaved = false;
+    showAddNoteModal = true;
+  }
+
+  async function saveNote() {
+    if (!noteText.trim()) return;
+
+    isSavingNote = true;
+
+    try {
+      const fullNote = noteContext
+        ? `${noteContext}\n\n${noteText}`
+        : noteText;
+
+      const response = await fetch('http://127.0.0.1:8000/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: fullNote,
+          source: 'note:user-annotation'
+        })
+      });
+
+      if (response.ok) {
+        noteSaved = true;
+        setTimeout(() => {
+          showAddNoteModal = false;
+          noteSaved = false;
+        }, 1500);
+      }
+    } catch (e) {
+      console.error('Failed to save note:', e);
+    } finally {
+      isSavingNote = false;
+    }
+  }
+
+  function closeNoteModal() {
+    showAddNoteModal = false;
+    noteText = '';
+    noteContext = '';
+  }
 </script>
 
 <div class="terminal">
@@ -372,6 +432,73 @@ Saved: ${new Date().toLocaleString()}`;
     {#if $chatMessages.length === 0}
       <div class="welcome">
         <p class="welcome-title">What would you like to know?</p>
+
+        <!-- Centered search lozenge -->
+        <div class="center-search-container">
+          <div class="center-search-lozenge">
+            <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="m21 21-4.35-4.35"/>
+            </svg>
+            {#if isListening}
+              <input
+                type="text"
+                value={interimTranscript || 'Listening...'}
+                placeholder="Listening..."
+                disabled={true}
+                class="center-input listening-input"
+              />
+            {:else}
+              <input
+                type="text"
+                bind:value={inputValue}
+                on:keydown={handleKeydown}
+                placeholder="Ask a question about your data..."
+                disabled={isLoading}
+                class="center-input"
+                autofocus
+              />
+            {/if}
+            {#if voiceSupported}
+              <button
+                class="center-mic-btn"
+                class:listening={isListening}
+                on:click={toggleVoiceInput}
+                title={isListening ? 'Stop listening' : 'Voice input'}
+                disabled={isLoading}
+              >
+                {#if isListening}
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="6" y="6" width="12" height="12" rx="2"/>
+                  </svg>
+                {:else}
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" y1="19" x2="12" y2="23"/>
+                    <line x1="8" y1="23" x2="16" y2="23"/>
+                  </svg>
+                {/if}
+              </button>
+            {/if}
+            <button
+              class="center-send-btn"
+              on:click={sendMessage}
+              disabled={isLoading || isListening || !inputValue.trim()}
+              title="Send message"
+            >
+              {#if isLoading}
+                <span class="btn-spinner">{spinnerChar}</span>
+              {:else}
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="22" y1="2" x2="11" y2="13"/>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                </svg>
+              {/if}
+            </button>
+          </div>
+          <p class="search-hint">Press Enter to search, or click a suggestion below</p>
+        </div>
 
         <div class="query-section">
           <span class="section-label">Team & People</span>
@@ -508,6 +635,16 @@ Saved: ${new Date().toLocaleString()}`;
                     Views
                   </button>
                   <button
+                    class="action-btn add-note-btn"
+                    on:click={() => openAddNoteWithContext(idx)}
+                    title="Add your thoughts or notes about this"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 5v14M5 12h14"/>
+                    </svg>
+                    Add Note
+                  </button>
+                  <button
                     class="action-btn"
                     class:success={copiedId === idx}
                     on:click={() => copyResponse(msg.content, idx)}
@@ -567,60 +704,110 @@ Saved: ${new Date().toLocaleString()}`;
     {/if}
   </div>
 
-  <div class="terminal-input">
-    <span class="prompt">> </span>
-    {#if isListening}
-      <input
-        type="text"
-        value={interimTranscript || 'Listening...'}
-        placeholder="Listening..."
-        disabled={true}
-        class="listening-input"
-      />
-    {:else}
-      <input
-        type="text"
-        bind:value={inputValue}
-        on:keydown={handleKeydown}
-        placeholder="Ask a question..."
-        disabled={isLoading}
-      />
-    {/if}
-    {#if voiceSupported}
+  {#if $chatMessages.length > 0}
+    <div class="terminal-input">
+      <span class="prompt">> </span>
+      {#if isListening}
+        <input
+          type="text"
+          value={interimTranscript || 'Listening...'}
+          placeholder="Listening..."
+          disabled={true}
+          class="listening-input"
+        />
+      {:else}
+        <input
+          type="text"
+          bind:value={inputValue}
+          on:keydown={handleKeydown}
+          placeholder="Ask a question..."
+          disabled={isLoading}
+        />
+      {/if}
+      {#if voiceSupported}
+        <button
+          class="mic-btn"
+          class:listening={isListening}
+          on:click={toggleVoiceInput}
+          title={isListening ? 'Stop listening' : 'Voice input'}
+          disabled={isLoading}
+        >
+          {#if isListening}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6" y="6" width="12" height="12" rx="2"/>
+            </svg>
+          {:else}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <line x1="12" y1="19" x2="12" y2="23"/>
+              <line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+          {/if}
+        </button>
+      {/if}
       <button
-        class="mic-btn"
-        class:listening={isListening}
-        on:click={toggleVoiceInput}
-        title={isListening ? 'Stop listening' : 'Voice input'}
-        disabled={isLoading}
+        class="send-btn"
+        on:click={sendMessage}
+        disabled={isLoading || isListening || !inputValue.trim()}
+        title="Send message"
       >
-        {#if isListening}
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-            <rect x="6" y="6" width="12" height="12" rx="2"/>
-          </svg>
-        {:else}
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-            <line x1="12" y1="19" x2="12" y2="23"/>
-            <line x1="8" y1="23" x2="16" y2="23"/>
-          </svg>
-        {/if}
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="22" y1="2" x2="11" y2="13"/>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+        </svg>
       </button>
-    {/if}
-    <button
-      class="send-btn"
-      on:click={sendMessage}
-      disabled={isLoading || isListening || !inputValue.trim()}
-      title="Send message"
-    >
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <line x1="22" y1="2" x2="11" y2="13"/>
-        <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-      </svg>
-    </button>
-  </div>
+    </div>
+  {/if}
 </div>
+
+<!-- Add Note Modal -->
+{#if showAddNoteModal}
+  <div class="note-modal-overlay" on:click={closeNoteModal}>
+    <div class="note-modal" on:click|stopPropagation>
+      <div class="note-modal-header">
+        <h3>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+          Add Note
+        </h3>
+        <button class="close-modal" on:click={closeNoteModal}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      {#if noteContext}
+        <div class="note-context">{noteContext}</div>
+      {/if}
+      <textarea
+        class="note-input"
+        placeholder="Add your thoughts, insights, or notes..."
+        bind:value={noteText}
+        rows="6"
+        disabled={isSavingNote || noteSaved}
+      ></textarea>
+      <div class="note-modal-footer">
+        <span class="note-hint">This note will be indexed and searchable</span>
+        <button
+          class="save-note-btn"
+          class:success={noteSaved}
+          on:click={saveNote}
+          disabled={!noteText.trim() || isSavingNote || noteSaved}
+        >
+          {#if isSavingNote}
+            <span class="spinner"></span> Saving...
+          {:else if noteSaved}
+            Saved!
+          {:else}
+            Save Note
+          {/if}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .terminal {
@@ -684,10 +871,121 @@ Saved: ${new Date().toLocaleString()}`;
   }
 
   .welcome-title {
-    font-size: 20px;
+    font-size: 28px;
     font-weight: 600;
     color: var(--text-primary);
-    margin: 0 0 24px 0;
+    margin: 0 0 28px 0;
+  }
+
+  /* Center Search Lozenge Styles */
+  .center-search-container {
+    width: 100%;
+    max-width: 650px;
+    margin-bottom: 32px;
+  }
+
+  .center-search-lozenge {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    border-radius: 50px;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+
+  .center-search-lozenge:focus-within {
+    border-color: var(--accent-orange);
+    box-shadow: 0 4px 20px rgba(249, 115, 22, 0.2);
+  }
+
+  .center-search-lozenge .search-icon {
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .center-search-lozenge:focus-within .search-icon {
+    color: var(--accent-orange);
+  }
+
+  .center-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 18px;
+    outline: none;
+    caret-color: var(--accent-orange);
+  }
+
+  .center-input::placeholder {
+    color: var(--text-muted);
+  }
+
+  .center-input:disabled {
+    opacity: 0.6;
+  }
+
+  .center-mic-btn,
+  .center-send-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+
+  .center-mic-btn:hover:not(:disabled),
+  .center-send-btn:hover:not(:disabled) {
+    background: var(--bg-secondary);
+    border-color: var(--text-muted);
+    color: var(--text-primary);
+  }
+
+  .center-mic-btn:disabled,
+  .center-send-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .center-mic-btn.listening {
+    background: var(--accent-red);
+    border-color: var(--accent-red);
+    color: white;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  .center-send-btn {
+    background: var(--accent-orange);
+    border-color: var(--accent-orange);
+    color: white;
+  }
+
+  .center-send-btn:hover:not(:disabled) {
+    background: #ea580c;
+    border-color: #ea580c;
+    color: white;
+  }
+
+  .btn-spinner {
+    font-weight: bold;
+    font-size: 16px;
+  }
+
+  .search-hint {
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--text-muted);
   }
 
   .query-section {
@@ -698,12 +996,12 @@ Saved: ${new Date().toLocaleString()}`;
 
   .section-label {
     display: block;
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: var(--text-muted);
-    margin-bottom: 10px;
+    margin-bottom: 12px;
   }
 
   .lozenges {
@@ -716,9 +1014,9 @@ Saved: ${new Date().toLocaleString()}`;
   .lozenge {
     display: inline-flex;
     align-items: center;
-    padding: 8px 16px;
-    border-radius: 20px;
-    font-size: 13px;
+    padding: 10px 18px;
+    border-radius: 22px;
+    font-size: 15px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
@@ -802,8 +1100,8 @@ Saved: ${new Date().toLocaleString()}`;
 
   .query {
     color: var(--accent-orange);
-    font-size: 14px;
-    margin-bottom: 8px;
+    font-size: 16px;
+    margin-bottom: 10px;
   }
 
   .prompt {
@@ -821,9 +1119,9 @@ Saved: ${new Date().toLocaleString()}`;
 
   .response-text {
     margin: 0;
-    padding: 16px;
-    font-size: 13px;
-    line-height: 1.6;
+    padding: 20px;
+    font-size: 17px;
+    line-height: 1.75;
     color: var(--text-primary);
     word-wrap: break-word;
     font-family: inherit;
@@ -842,8 +1140,8 @@ Saved: ${new Date().toLocaleString()}`;
     border-collapse: collapse;
     width: auto;
     max-width: 100%;
-    margin: 12px 0;
-    font-size: 12px;
+    margin: 14px 0;
+    font-size: 14px;
     border: 1px solid var(--border-color);
     border-radius: 6px;
     overflow: hidden;
@@ -861,7 +1159,7 @@ Saved: ${new Date().toLocaleString()}`;
   .response-text :global(th) {
     background: var(--bg-tertiary);
     font-weight: 600;
-    font-size: 11px;
+    font-size: 13px;
     text-transform: uppercase;
     letter-spacing: 0.3px;
     color: var(--text-secondary);
@@ -1116,7 +1414,7 @@ Saved: ${new Date().toLocaleString()}`;
     border: none;
     color: var(--text-primary);
     font-family: inherit;
-    font-size: 14px;
+    font-size: 16px;
     outline: none;
   }
 
@@ -1183,5 +1481,158 @@ Saved: ${new Date().toLocaleString()}`;
     background: #ea580c;
     border-color: #ea580c;
     color: white;
+  }
+
+  /* Add Note Button */
+  .add-note-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--accent-green) !important;
+    border-color: var(--accent-green) !important;
+  }
+
+  .add-note-btn:hover {
+    background: var(--accent-green) !important;
+    color: white !important;
+  }
+
+  /* Note Modal Styles */
+  .note-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+  }
+
+  .note-modal {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  }
+
+  .note-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .note-modal-header h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .note-modal-header h3 svg {
+    color: var(--accent-green);
+  }
+
+  .close-modal {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s;
+  }
+
+  .close-modal:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+
+  .note-context {
+    padding: 12px 20px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-style: italic;
+  }
+
+  .note-input {
+    width: 100%;
+    padding: 16px 20px;
+    background: var(--bg-primary);
+    border: none;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 14px;
+    resize: vertical;
+    min-height: 120px;
+  }
+
+  .note-input::placeholder {
+    color: var(--text-muted);
+  }
+
+  .note-input:focus {
+    outline: none;
+    background: var(--bg-secondary);
+  }
+
+  .note-modal-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+  }
+
+  .note-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .save-note-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--accent-green);
+    border: none;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .save-note-btn:hover:not(:disabled) {
+    background: #2da44e;
+  }
+
+  .save-note-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .save-note-btn.success {
+    background: var(--accent-green);
+  }
+
+  .save-note-btn .spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid transparent;
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
   }
 </style>

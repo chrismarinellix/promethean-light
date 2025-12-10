@@ -1,11 +1,32 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { daemonConnected } from '../stores.js';
 
   let adminInfo = null;
+  let previousInfo = null;
   let loading = true;
   let error = null;
   let lastRefresh = null;
+  let refreshChanges = null; // Track what changed on refresh
+
+  // Rebuild state
+  let rebuildStatus = 'idle'; // 'idle', 'running', 'complete', 'error'
+  let rebuildProgress = 0;
+  let rebuildStartTime = null;
+  let rebuildElapsed = 0;
+  let rebuildResult = null;
+  let rebuildLogs = [];
+  let rebuildPollInterval = null;
+  let elapsedInterval = null;
+
+  // Summaries update state
+  let summariesStatus = 'idle'; // 'idle', 'updating', 'complete', 'error'
+  let summariesMessage = '';
+
+  // Clusters rebuild state
+  let clustersStatus = 'idle'; // 'idle', 'running', 'complete', 'error'
+  let clustersMessage = '';
+  let clustersResult = null;
 
   async function fetchAdminInfo() {
     loading = true;
@@ -28,6 +49,11 @@
     }
   });
 
+  onDestroy(() => {
+    if (rebuildPollInterval) clearInterval(rebuildPollInterval);
+    if (elapsedInterval) clearInterval(elapsedInterval);
+  });
+
   $: if ($daemonConnected && !adminInfo && !loading) {
     fetchAdminInfo();
   }
@@ -44,6 +70,193 @@
 
   function getStatusText(status) {
     return status ? 'Ready' : 'Not Ready';
+  }
+
+  function formatTime(seconds) {
+    if (seconds < 60) return `${Math.round(seconds)}s`;
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.round(seconds % 60);
+    return `${mins}m ${secs}s`;
+  }
+
+  function addLog(message, type = 'info') {
+    const timestamp = new Date().toLocaleTimeString();
+    rebuildLogs = [...rebuildLogs, { timestamp, message, type }];
+  }
+
+  async function startRebuild() {
+    rebuildStatus = 'running';
+    rebuildProgress = 0;
+    rebuildStartTime = Date.now();
+    rebuildElapsed = 0;
+    rebuildResult = null;
+    rebuildLogs = [];
+
+    addLog('Starting vector database rebuild...', 'info');
+    addLog(`Total chunks in SQLite: ${adminInfo?.database?.documents || '?'} documents`, 'debug');
+    addLog(`Current vectors in Qdrant: ${adminInfo?.vectordb?.vectors || 0}`, 'debug');
+
+    try {
+      addLog('Sending rebuild request to daemon...', 'info');
+
+      // Start the rebuild (returns immediately now)
+      const response = await fetch('http://127.0.0.1:8000/admin/rebuild-vectors', {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(errText || 'Failed to start rebuild');
+      }
+
+      const startResult = await response.json();
+      if (!startResult.success) {
+        // If already running, just start polling to show progress
+        if (startResult.message && startResult.message.includes('already in progress')) {
+          addLog('Rebuild already running, showing progress...', 'info');
+          // Keep rebuildStatus as 'running' and start polling
+        } else {
+          addLog(`Could not start: ${startResult.message}`, 'warning');
+          rebuildStatus = 'idle';
+          return;
+        }
+      } else {
+        addLog('Rebuild started in background...', 'info');
+      }
+
+      // Start polling for progress
+      rebuildPollInterval = setInterval(async () => {
+        try {
+          const statusRes = await fetch('http://127.0.0.1:8000/admin/rebuild-vectors/status');
+          if (statusRes.ok) {
+            const status = await statusRes.json();
+
+            // Update progress from server
+            rebuildProgress = status.progress || 0;
+            rebuildElapsed = status.elapsed_seconds || 0;
+
+            // Add progress log (only if changed significantly)
+            if (status.status === 'running') {
+              addLog(`Progress: ${status.indexed}/${status.total_chunks} (${status.progress}%) - ${status.rate_per_second}/sec`, 'progress');
+            }
+
+            // Check if complete
+            if (status.status === 'complete') {
+              clearInterval(rebuildPollInterval);
+              rebuildStatus = 'complete';
+              rebuildProgress = 100;
+              rebuildResult = {
+                success: true,
+                indexed: status.indexed,
+                skipped: status.skipped,
+                errors: status.errors,
+                error_messages: status.error_messages || [],
+                elapsed_seconds: status.elapsed_seconds,
+                rate_per_second: status.rate_per_second,
+                vector_count: status.vector_count
+              };
+
+              addLog(`Rebuild complete!`, 'success');
+              addLog(`Indexed: ${status.indexed} chunks`, 'success');
+              addLog(`Skipped: ${status.skipped} (too short)`, 'debug');
+              addLog(`Errors: ${status.errors}`, status.errors > 0 ? 'error' : 'debug');
+              addLog(`Total time: ${status.elapsed_seconds}s`, 'info');
+              addLog(`Rate: ${status.rate_per_second} chunks/sec`, 'info');
+              addLog(`Final vector count: ${status.vector_count}`, 'success');
+
+              if (status.error_messages && status.error_messages.length > 0) {
+                addLog(`Error details:`, 'error');
+                status.error_messages.forEach(msg => addLog(`  ${msg}`, 'error'));
+              }
+
+              // Refresh admin info
+              fetchAdminInfo();
+            }
+
+            // Check if error
+            if (status.status === 'error') {
+              clearInterval(rebuildPollInterval);
+              rebuildStatus = 'error';
+              addLog(`Error: ${status.message}`, 'error');
+            }
+          }
+        } catch (e) {
+          // Ignore polling errors
+        }
+      }, 1000);  // Poll every 1 second for more responsive UI
+
+    } catch (e) {
+      clearInterval(rebuildPollInterval);
+      rebuildStatus = 'error';
+      addLog(`Error: ${e.message}`, 'error');
+    }
+  }
+
+  function getRemainingTime() {
+    if (rebuildProgress <= 0 || rebuildElapsed <= 0) return '--';
+    const rate = rebuildProgress / rebuildElapsed;
+    const remaining = (100 - rebuildProgress) / rate;
+    return formatTime(remaining);
+  }
+
+  async function updateSummaries() {
+    summariesStatus = 'updating';
+    summariesMessage = 'Refreshing pre-computed summaries...';
+
+    try {
+      const response = await fetch('http://127.0.0.1:8000/admin/refresh-summaries', {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to refresh summaries');
+      }
+
+      const result = await response.json();
+      summariesStatus = 'complete';
+      summariesMessage = result.message || 'Summaries refreshed successfully';
+
+      setTimeout(() => {
+        summariesStatus = 'idle';
+        summariesMessage = '';
+      }, 5000);
+    } catch (e) {
+      summariesStatus = 'error';
+      summariesMessage = e.message || 'Failed to refresh summaries';
+    }
+  }
+
+  async function rebuildClusters() {
+    clustersStatus = 'running';
+    clustersMessage = 'Generating clusters with HDBSCAN...';
+    clustersResult = null;
+
+    try {
+      const response = await fetch('http://127.0.0.1:8000/clusters/rebuild?min_cluster_size=10&min_samples=5', {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(errText || 'Failed to rebuild clusters');
+      }
+
+      const result = await response.json();
+      clustersStatus = 'complete';
+      clustersResult = result;
+      clustersMessage = result.message || `Created ${result.clusters} clusters`;
+
+      // Refresh admin info to show new cluster count
+      fetchAdminInfo();
+
+      setTimeout(() => {
+        clustersStatus = 'idle';
+        clustersMessage = '';
+      }, 8000);
+    } catch (e) {
+      clustersStatus = 'error';
+      clustersMessage = e.message || 'Failed to rebuild clusters';
+    }
   }
 </script>
 
@@ -103,6 +316,144 @@
         </div>
       </section>
 
+      <!-- System Architecture -->
+      <section class="section architecture-section">
+        <h3 class="section-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <path d="M3 9h18"/>
+            <path d="M9 21V9"/>
+          </svg>
+          System Architecture
+        </h3>
+        <div class="architecture-diagram">
+          <div class="arch-flow">
+            <!-- Data Sources -->
+            <div class="arch-column sources">
+              <div class="arch-header">Data Sources</div>
+              <div class="arch-box source-box">
+                <span class="arch-icon">📧</span>
+                <span>Outlook Emails</span>
+              </div>
+              <div class="arch-box source-box">
+                <span class="arch-icon">📄</span>
+                <span>Documents</span>
+              </div>
+              <div class="arch-box source-box">
+                <span class="arch-icon">📝</span>
+                <span>Notes</span>
+              </div>
+            </div>
+
+            <div class="arch-arrow">→</div>
+
+            <!-- Storage -->
+            <div class="arch-column storage">
+              <div class="arch-header">Storage Layer</div>
+              <div class="arch-box storage-box">
+                <span class="arch-icon">🗄️</span>
+                <span>SQLite</span>
+                <span class="arch-detail">{adminInfo?.database?.documents || 0} docs</span>
+              </div>
+              <div class="arch-box storage-box">
+                <span class="arch-icon">🔷</span>
+                <span>Qdrant</span>
+                <span class="arch-detail">{adminInfo?.vectordb?.vectors || 0} vectors</span>
+              </div>
+            </div>
+
+            <div class="arch-arrow">→</div>
+
+            <!-- Processing -->
+            <div class="arch-column processing">
+              <div class="arch-header">Query Processing</div>
+              <div class="arch-box process-box">
+                <span class="arch-icon">🔍</span>
+                <span>Semantic Search</span>
+                <span class="arch-detail">BGE embeddings</span>
+              </div>
+              <div class="arch-box process-box">
+                <span class="arch-icon">📊</span>
+                <span>Context Builder</span>
+                <span class="arch-detail">Top 50 chunks</span>
+              </div>
+            </div>
+
+            <div class="arch-arrow">→</div>
+
+            <!-- LLM -->
+            <div class="arch-column llm">
+              <div class="arch-header">LLM Response</div>
+              <div class="arch-box llm-box">
+                <span class="arch-icon">🤖</span>
+                <span>GPT-4o</span>
+                <span class="arch-detail">Summarizes</span>
+              </div>
+              <div class="arch-box summary-box">
+                <span class="arch-icon">⚡</span>
+                <span>Pre-computed</span>
+                <span class="arch-detail">0 tokens</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="arch-legend">
+            <div class="legend-item">
+              <span class="legend-flow">Your Query → Semantic Search → Relevant Chunks → LLM → Answer</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Pre-computed Summaries -->
+      <section class="section summaries-section">
+        <h3 class="section-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
+            <polyline points="13 2 13 9 20 9"/>
+          </svg>
+          Pre-computed Summaries
+        </h3>
+        <div class="summaries-info">
+          <p class="summaries-description">
+            Pre-computed summaries provide instant answers (0 tokens, 0 cost) for common queries like team pay,
+            retention bonuses, and Project Sentinel status. Click Update to refresh with latest data.
+          </p>
+          <div class="summaries-list">
+            <span class="summary-tag">Team Pay</span>
+            <span class="summary-tag">Australia Staff</span>
+            <span class="summary-tag">India Staff</span>
+            <span class="summary-tag">Malaysia Staff</span>
+            <span class="summary-tag">Retention Bonuses</span>
+            <span class="summary-tag">Project Sentinel</span>
+          </div>
+        </div>
+
+        {#if summariesStatus === 'updating'}
+          <div class="summaries-progress">
+            <span class="spinner"></span>
+            <span>{summariesMessage}</span>
+          </div>
+        {:else if summariesStatus === 'complete'}
+          <div class="summaries-result success">
+            <span>✓</span>
+            <span>{summariesMessage}</span>
+          </div>
+        {:else if summariesStatus === 'error'}
+          <div class="summaries-result error">
+            <span>✗</span>
+            <span>{summariesMessage}</span>
+          </div>
+        {:else}
+          <button class="summaries-btn" on:click={updateSummaries}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+            </svg>
+            Update Pre-computed Summaries
+          </button>
+        {/if}
+      </section>
+
       <!-- Database Stats -->
       <section class="section">
         <h3 class="section-title">
@@ -133,6 +484,54 @@
         </div>
       </section>
 
+      <!-- Rebuild Clusters -->
+      <section class="section clusters-section">
+        <h3 class="section-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <circle cx="19" cy="5" r="2"/>
+            <circle cx="5" cy="5" r="2"/>
+            <circle cx="19" cy="19" r="2"/>
+            <circle cx="5" cy="19" r="2"/>
+            <line x1="12" y1="9" x2="12" y2="3"/>
+            <line x1="14.5" y1="13.5" x2="17.5" y2="17.5"/>
+            <line x1="9.5" y1="13.5" x2="6.5" y2="17.5"/>
+          </svg>
+          ML Clustering
+        </h3>
+        <div class="clusters-info">
+          <p class="clusters-description">
+            Groups similar documents using HDBSCAN clustering algorithm.
+            Creates topic clusters for easier browsing. Currently: <strong>{adminInfo?.database?.clusters || 0}</strong> clusters.
+          </p>
+        </div>
+
+        {#if clustersStatus === 'running'}
+          <div class="clusters-progress">
+            <span class="spinner"></span>
+            <span>{clustersMessage}</span>
+          </div>
+        {:else if clustersStatus === 'complete'}
+          <div class="clusters-result success">
+            <span>✓</span>
+            <span>{clustersMessage}</span>
+          </div>
+        {:else if clustersStatus === 'error'}
+          <div class="clusters-result error">
+            <span>✗</span>
+            <span>{clustersMessage}</span>
+          </div>
+        {:else}
+          <button class="clusters-btn" on:click={rebuildClusters}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+            </svg>
+            Rebuild Clusters
+          </button>
+        {/if}
+      </section>
+
       <!-- Vector DB -->
       <section class="section">
         <h3 class="section-title">
@@ -157,6 +556,116 @@
             <span class="stat-label">Storage</span>
           </div>
         </div>
+      </section>
+
+      <!-- Rebuild Vector DB -->
+      <section class="section rebuild-section">
+        <h3 class="section-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+          </svg>
+          Rebuild Vector Database
+        </h3>
+
+        <div class="rebuild-info">
+          <p class="rebuild-description">
+            Syncs all chunks from SQLite to the Qdrant vector database.
+            Use this if search isn't finding documents or if vectors are out of sync.
+          </p>
+
+          {#if adminInfo?.vectordb && adminInfo?.database}
+            <div class="sync-status" class:synced={adminInfo.vectordb.vectors >= adminInfo.database.documents * 0.95} class:unsynced={adminInfo.vectordb.vectors < adminInfo.database.documents * 0.95}>
+              <span class="sync-icon">{adminInfo.vectordb.vectors >= adminInfo.database.documents * 0.95 ? '✓' : '⚠'}</span>
+              <span>
+                {#if adminInfo.vectordb.vectors >= adminInfo.database.documents * 0.95}
+                  Vectors appear to be in sync
+                {:else}
+                  Vectors may be out of sync ({adminInfo.vectordb.vectors} vectors vs {adminInfo.database.documents} documents)
+                {/if}
+              </span>
+            </div>
+          {/if}
+        </div>
+
+        {#if rebuildStatus === 'running'}
+          <!-- Progress bar and timer -->
+          <div class="rebuild-progress">
+            <div class="progress-header">
+              <span class="progress-label">Rebuilding...</span>
+              <span class="progress-percent">{rebuildProgress.toFixed(1)}%</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: {rebuildProgress}%"></div>
+            </div>
+            <div class="progress-stats">
+              <div class="stat">
+                <span class="stat-name">Elapsed</span>
+                <span class="stat-val">{formatTime(rebuildElapsed)}</span>
+              </div>
+              <div class="stat">
+                <span class="stat-name">Remaining</span>
+                <span class="stat-val">{getRemainingTime()}</span>
+              </div>
+              <div class="stat">
+                <span class="stat-name">Rate</span>
+                <span class="stat-val">{rebuildElapsed > 0 ? (rebuildProgress / rebuildElapsed * 100).toFixed(1) : '--'}%/s</span>
+              </div>
+            </div>
+          </div>
+        {:else}
+          <button
+            class="rebuild-btn"
+            on:click={startRebuild}
+            disabled={rebuildStatus === 'running'}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+            </svg>
+            {rebuildStatus === 'complete' ? 'Rebuild Again' : 'Start Rebuild'}
+          </button>
+        {/if}
+
+        {#if rebuildResult}
+          <div class="rebuild-result" class:success={rebuildResult.success && rebuildResult.errors === 0} class:warning={rebuildResult.success && rebuildResult.errors > 0} class:error={!rebuildResult.success}>
+            <div class="result-header">
+              {#if rebuildResult.success && rebuildResult.errors === 0}
+                <span class="result-icon">✓</span>
+                <span>Rebuild Successful</span>
+              {:else if rebuildResult.success && rebuildResult.errors > 0}
+                <span class="result-icon">⚠</span>
+                <span>Rebuild Complete with Warnings</span>
+              {:else}
+                <span class="result-icon">✗</span>
+                <span>Rebuild Failed</span>
+              {/if}
+            </div>
+            <div class="result-stats">
+              <span>Indexed: <strong>{rebuildResult.indexed}</strong></span>
+              <span>Skipped: <strong>{rebuildResult.skipped}</strong></span>
+              <span>Errors: <strong>{rebuildResult.errors}</strong></span>
+              <span>Time: <strong>{rebuildResult.elapsed_seconds}s</strong></span>
+              <span>Rate: <strong>{rebuildResult.rate_per_second}/s</strong></span>
+            </div>
+          </div>
+        {/if}
+
+        <!-- Debug logs -->
+        {#if rebuildLogs.length > 0}
+          <div class="rebuild-logs">
+            <div class="logs-header">
+              <span>Debug Log</span>
+              <button class="clear-logs" on:click={() => rebuildLogs = []}>Clear</button>
+            </div>
+            <div class="logs-content">
+              {#each rebuildLogs as log}
+                <div class="log-line {log.type}">
+                  <span class="log-time">[{log.timestamp}]</span>
+                  <span class="log-msg">{log.message}</span>
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/if}
       </section>
 
       <!-- Embedder -->
@@ -561,5 +1070,565 @@
     text-align: center;
     font-size: 11px;
     color: var(--text-muted);
+  }
+
+  /* Rebuild Section Styles */
+  .rebuild-section {
+    border-color: var(--accent-orange);
+  }
+
+  .rebuild-info {
+    margin-bottom: 16px;
+  }
+
+  .rebuild-description {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 0 0 12px 0;
+    line-height: 1.5;
+  }
+
+  .sync-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+
+  .sync-status.synced {
+    background: rgba(63, 185, 80, 0.15);
+    border: 1px solid var(--accent-green);
+    color: var(--accent-green);
+  }
+
+  .sync-status.unsynced {
+    background: rgba(255, 166, 87, 0.15);
+    border: 1px solid var(--accent-orange);
+    color: var(--accent-orange);
+  }
+
+  .sync-icon {
+    font-size: 14px;
+    font-weight: bold;
+  }
+
+  .rebuild-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 12px 20px;
+    background: var(--accent-orange);
+    border: none;
+    border-radius: 6px;
+    color: white;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .rebuild-btn:hover:not(:disabled) {
+    background: #e5a040;
+  }
+
+  .rebuild-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .rebuild-progress {
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+
+  .progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .progress-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .progress-percent {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent-orange);
+  }
+
+  .progress-bar {
+    height: 8px;
+    background: var(--bg-primary);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-orange), #ffc107);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+  }
+
+  .progress-stats {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .progress-stats .stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+  }
+
+  .progress-stats .stat-name {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+  }
+
+  .progress-stats .stat-val {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .rebuild-result {
+    padding: 14px;
+    border-radius: 6px;
+    margin-top: 12px;
+  }
+
+  .rebuild-result.success {
+    background: rgba(63, 185, 80, 0.15);
+    border: 1px solid var(--accent-green);
+  }
+
+  .rebuild-result.warning {
+    background: rgba(255, 166, 87, 0.15);
+    border: 1px solid var(--accent-orange);
+  }
+
+  .rebuild-result.error {
+    background: rgba(248, 81, 73, 0.15);
+    border: 1px solid var(--accent-red);
+  }
+
+  .result-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .rebuild-result.success .result-header {
+    color: var(--accent-green);
+  }
+
+  .rebuild-result.warning .result-header {
+    color: var(--accent-orange);
+  }
+
+  .rebuild-result.error .result-header {
+    color: var(--accent-red);
+  }
+
+  .result-icon {
+    font-size: 16px;
+  }
+
+  .result-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 20px;
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+
+  .result-stats strong {
+    color: var(--text-primary);
+  }
+
+  .rebuild-logs {
+    margin-top: 16px;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .logs-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border-color);
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  .clear-logs {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 10px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: inherit;
+  }
+
+  .clear-logs:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+  }
+
+  .logs-content {
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 8px;
+    font-family: 'Consolas', 'Monaco', monospace;
+  }
+
+  .log-line {
+    display: flex;
+    gap: 8px;
+    padding: 3px 6px;
+    font-size: 11px;
+    border-radius: 2px;
+  }
+
+  .log-line:nth-child(odd) {
+    background: var(--bg-primary);
+  }
+
+  .log-time {
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .log-msg {
+    color: var(--text-secondary);
+    word-break: break-all;
+  }
+
+  .log-line.info .log-msg {
+    color: var(--text-primary);
+  }
+
+  .log-line.debug .log-msg {
+    color: var(--text-muted);
+  }
+
+  .log-line.progress .log-msg {
+    color: var(--accent-blue);
+  }
+
+  .log-line.success .log-msg {
+    color: var(--accent-green);
+  }
+
+  .log-line.error .log-msg {
+    color: var(--accent-red);
+  }
+
+  .log-line.warning .log-msg {
+    color: var(--accent-orange);
+  }
+
+  /* Architecture Diagram Styles */
+  .architecture-section {
+    border-color: var(--accent-blue);
+  }
+
+  .architecture-diagram {
+    padding: 12px;
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+  }
+
+  .arch-flow {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 12px;
+  }
+
+  .arch-column {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 110px;
+    flex: 1;
+  }
+
+  .arch-header {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    text-align: center;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .arch-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 10px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    text-align: center;
+    border: 1px solid var(--border-color);
+  }
+
+  .arch-icon {
+    font-size: 18px;
+    margin-bottom: 2px;
+  }
+
+  .arch-detail {
+    font-size: 9px;
+    color: var(--text-muted);
+  }
+
+  .source-box {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: rgba(59, 130, 246, 0.3);
+    color: #60a5fa;
+  }
+
+  .storage-box {
+    background: rgba(139, 92, 246, 0.1);
+    border-color: rgba(139, 92, 246, 0.3);
+    color: #a78bfa;
+  }
+
+  .process-box {
+    background: rgba(34, 197, 94, 0.1);
+    border-color: rgba(34, 197, 94, 0.3);
+    color: #4ade80;
+  }
+
+  .llm-box {
+    background: rgba(249, 115, 22, 0.1);
+    border-color: rgba(249, 115, 22, 0.3);
+    color: #fb923c;
+  }
+
+  .summary-box {
+    background: rgba(236, 72, 153, 0.1);
+    border-color: rgba(236, 72, 153, 0.3);
+    color: #f472b6;
+  }
+
+  .arch-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    color: var(--text-muted);
+    padding-top: 60px;
+    font-weight: bold;
+  }
+
+  .arch-legend {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+    text-align: center;
+  }
+
+  .legend-flow {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-family: 'Consolas', 'Monaco', monospace;
+    background: var(--bg-primary);
+    padding: 6px 12px;
+    border-radius: 4px;
+  }
+
+  /* Summaries Section Styles */
+  .summaries-section {
+    border-color: var(--accent-purple);
+  }
+
+  .summaries-info {
+    margin-bottom: 16px;
+  }
+
+  .summaries-description {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 0 0 12px 0;
+    line-height: 1.5;
+  }
+
+  .summaries-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .summary-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    background: rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    border-radius: 12px;
+    font-size: 11px;
+    color: #a78bfa;
+  }
+
+  .summaries-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 12px 20px;
+    background: var(--accent-purple);
+    border: none;
+    border-radius: 6px;
+    color: white;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .summaries-btn:hover {
+    background: #7c3aed;
+  }
+
+  .summaries-progress {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 14px;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .summaries-result {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .summaries-result.success {
+    background: rgba(63, 185, 80, 0.15);
+    border: 1px solid var(--accent-green);
+    color: var(--accent-green);
+  }
+
+  .summaries-result.error {
+    background: rgba(248, 81, 73, 0.15);
+    border: 1px solid var(--accent-red);
+    color: var(--accent-red);
+  }
+
+  /* Clusters Section Styles */
+  .clusters-section {
+    border-color: var(--accent-green);
+  }
+
+  .clusters-info {
+    margin-bottom: 16px;
+  }
+
+  .clusters-description {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  .clusters-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 12px 20px;
+    background: var(--accent-green);
+    border: none;
+    border-radius: 6px;
+    color: white;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .clusters-btn:hover {
+    background: #2da44e;
+  }
+
+  .clusters-progress {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 14px;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .clusters-result {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .clusters-result.success {
+    background: rgba(63, 185, 80, 0.15);
+    border: 1px solid var(--accent-green);
+    color: var(--accent-green);
+  }
+
+  .clusters-result.error {
+    background: rgba(248, 81, 73, 0.15);
+    border: 1px solid var(--accent-red);
+    color: var(--accent-red);
   }
 </style>

@@ -51,7 +51,7 @@ class CryptoManager:
         except Exception:
             pass  # Windows doesn't support chmod
 
-        print(f"✓ Master key created: {self.key_file}")
+        print(f"[OK] Master key created: {self.key_file}")
 
     def unlock(self, passphrase: Optional[str] = None) -> None:
         """Unlock with passphrase and cache Fernet instance"""

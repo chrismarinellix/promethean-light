@@ -33,24 +33,24 @@ class IngestionPipeline:
     def ingest_file(self, file_path: Path) -> Optional[UUID]:
         """Ingest a file (supports TXT, PDF, DOCX, XLSX, CSV, JSON, MD)"""
         if not file_path.exists():
-            print(f"✗ File not found: {file_path}")
+            print(f"[X] File not found: {file_path}")
             return None
 
         # Read file
         try:
             content = file_path.read_bytes()
         except Exception as e:
-            print(f"✗ Error reading file: {e}")
+            print(f"[X] Error reading file: {e}")
             return None
 
         # Extract text based on file type
         text = self._extract_text_from_file(file_path, content)
         if text is None:
-            print(f"⚠ Skipping unsupported file: {file_path.name}")
+            print(f"[!] Skipping unsupported file: {file_path.name}")
             return None
 
         if not text.strip():
-            print(f"⚠ Skipping empty file: {file_path.name}")
+            print(f"[!] Skipping empty file: {file_path.name}")
             return None
 
         # Compute hash for deduplication
@@ -59,7 +59,7 @@ class IngestionPipeline:
         # Check if already exists
         existing = self.db.query(Document).filter(Document.file_hash == file_hash).first()
         if existing:
-            print(f"⚠ File already indexed: {file_path.name}")
+            print(f"[!] File already indexed: {file_path.name}")
             return existing.id
 
         # Extract file metadata for change tracking
@@ -86,14 +86,14 @@ class IngestionPipeline:
         # Process chunks and embeddings
         self._process_document(doc, text)
 
-        print(f"✓ Ingested: {file_path.name} (ID: {str(doc.id)[:8]}...)")
+        print(f"[OK] Ingested: {file_path.name} (ID: {str(doc.id)[:8]}...)")
         return doc.id
 
     def ingest_text(self, text: str, source: str = "stdin") -> Optional[UUID]:
         """Ingest raw text (from paste or other sources)"""
         # Check for semantic duplicates
         if self._is_semantic_duplicate(text):
-            print(f"⚠ Semantically similar content already exists (skipping)")
+            print(f"[!] Semantically similar content already exists (skipping)")
             return None
 
         # Create document
@@ -110,7 +110,7 @@ class IngestionPipeline:
         # Process chunks and embeddings
         self._process_document(doc, text)
 
-        print(f"✓ Ingested text (ID: {str(doc.id)[:8]}...)")
+        print(f"[OK] Ingested text (ID: {str(doc.id)[:8]}...)")
         return doc.id
 
     def ingest_email(self, email_data: dict) -> Optional[UUID]:
@@ -124,7 +124,7 @@ class IngestionPipeline:
         # Check for semantic duplicates (emails can be forwarded/duplicated)
         if self._is_semantic_duplicate(text, threshold=0.98):
             subject = email_data.get("subject", "(no subject)")[:40]
-            print(f"⚠ [{timestamp}] Duplicate email skipped: {subject}...")
+            print(f"[!] [{timestamp}] Duplicate email skipped: {subject}...")
             return None
 
         # Create document
@@ -143,11 +143,11 @@ class IngestionPipeline:
 
         subject = email_data.get("subject", "(no subject)")[:50]
         sender = email_data.get("sender", "unknown")[:30]
-        print(f"✓ [{timestamp}] Email ingested: '{subject}'")
-        print(f"   • From: {sender}")
-        print(f"   • Document ID: {str(doc.id)[:8]}...")
-        print(f"   • Chunks created: {chunk_count}")
-        print(f"   • Size: {len(text)} chars")
+        print(f"[OK] [{timestamp}] Email ingested: '{subject}'")
+        print(f"   - From: {sender}")
+        print(f"   - Document ID: {str(doc.id)[:8]}...")
+        print(f"   - Chunks created: {chunk_count}")
+        print(f"   - Size: {len(text)} chars")
         return doc.id
 
     def _process_document(self, doc: Document, text: str) -> int:

@@ -1,7 +1,7 @@
 <script>
   import { activeSection, favorites, stats, tags, clusters, daemonConnected, databaseInfo, apiKeysStatus, chatMessages, savedFolders } from '../stores.js';
   import { removeFavorite, searchQuery, searchResults, loadSavedFolders, saveToFolder, createFolder, removeFromFolder } from '../stores.js';
-  import { getStats, getTags, checkDaemon, startDaemon, getDatabaseInfo, getApiKeysStatus, getClusters } from '../api.js';
+  import { getStats, getTags, checkDaemon, startDaemon, getDatabaseInfo, getApiKeysStatus, getClusters, rebuildClusters } from '../api.js';
   import { onMount } from 'svelte';
   import UnlockModal from './UnlockModal.svelte';
   import AddNoteModal from './AddNoteModal.svelte';
@@ -16,6 +16,26 @@
     } else {
       console.log(prefix, message);
     }
+  }
+
+  // Format ISO timestamp as relative time (e.g., "2 hours ago", "Dec 4, 10:30")
+  function formatRelativeTime(isoString) {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+
+    // For older dates, show formatted date
+    const options = { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+    return date.toLocaleDateString('en-US', options);
   }
 
   let expandedSections = {
@@ -216,12 +236,34 @@
   }
 
   let isConnecting = false;
+  let isRestarting = false;
   let connectionError = '';
   let showUnlockModal = false;
   let isStartingDaemon = false;
   let unlockError = '';
   let showAddNoteModal = false;
   let showFileUploadModal = false;
+  let isRebuildingClusters = false;
+
+  async function handleRebuildClusters() {
+    isRebuildingClusters = true;
+    try {
+      debugLog('CLUSTERS', 'Rebuilding clusters...');
+      const result = await rebuildClusters(10, 5);
+      debugLog('CLUSTERS', 'Rebuild result:', result);
+
+      // Refresh clusters after rebuild
+      const clustersData = await getClusters();
+      if (clustersData) {
+        clusters.set(clustersData);
+      }
+    } catch (e) {
+      debugLog('CLUSTERS', `Rebuild failed: ${e.message}`);
+      console.error('Failed to rebuild clusters:', e);
+    } finally {
+      isRebuildingClusters = false;
+    }
+  }
 
   async function refreshStats() {
     connectionError = '';
@@ -284,6 +326,35 @@
     // If not connected, show unlock modal
     if (!$daemonConnected) {
       showUnlockModal = true;
+    }
+  }
+
+  async function handleRestartDaemon() {
+    isRestarting = true;
+    connectionError = '';
+
+    try {
+      debugLog('RESTART', 'Stopping daemon...');
+
+      // Call the stop endpoint
+      await fetch('http://127.0.0.1:8000/admin/stop', {
+        method: 'POST'
+      }).catch(() => {}); // Ignore error if daemon already stopped
+
+      // Wait for daemon to stop
+      await new Promise(r => setTimeout(r, 1500));
+
+      // Mark as disconnected
+      daemonConnected.set(false);
+
+      // Show unlock modal to restart
+      showUnlockModal = true;
+      debugLog('RESTART', 'Daemon stopped, showing unlock modal');
+    } catch (e) {
+      debugLog('RESTART', `Error: ${e.message}`);
+      connectionError = e.message || 'Failed to restart daemon';
+    } finally {
+      isRestarting = false;
     }
   }
 
@@ -376,16 +447,29 @@
         <span class="status-dot"></span>
         {$daemonConnected ? 'Connected' : 'Disconnected'}
       </div>
-      <button class="connect-btn" on:click={handleConnect} disabled={isConnecting}>
-        {#if isConnecting}
-          <span class="spinner"></span>
-        {:else}
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c1.66 0 3-4.03 3-9s-1.34-9-3-9m0 18c-1.66 0-3-4.03-3-9s1.34-9 3-9"/>
-          </svg>
-          {$daemonConnected ? 'Refresh' : 'Connect'}
+      <div class="control-buttons">
+        <button class="connect-btn" on:click={handleConnect} disabled={isConnecting} title="Refresh data">
+          {#if isConnecting}
+            <span class="spinner"></span>
+          {:else}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+            </svg>
+          {/if}
+        </button>
+        {#if $daemonConnected}
+          <button class="restart-btn" on:click={handleRestartDaemon} disabled={isRestarting} title="Restart daemon">
+            {#if isRestarting}
+              <span class="spinner"></span>
+            {:else}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18.36 6.64A9 9 0 1 1 5.64 6.64"/>
+                <line x1="12" y1="2" x2="12" y2="12"/>
+              </svg>
+            {/if}
+          </button>
         {/if}
-      </button>
+      </div>
     </div>
     {#if connectionError}
       <div class="error-msg">{connectionError}</div>
@@ -477,6 +561,16 @@
     </div>
   </div>
 
+  {#if $daemonConnected && $stats.last_email_at}
+    <div class="last-sync-banner" title="Last email ingested: {$stats.last_email_at}">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="2" y="4" width="20" height="16" rx="2"/>
+        <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+      </svg>
+      <span class="sync-text">Last email: <strong>{formatRelativeTime($stats.last_email_at)}</strong></span>
+    </div>
+  {/if}
+
   <div class="collapsible-sections">
     <!-- Favorites Section -->
     <div class="section">
@@ -541,6 +635,15 @@
               <path d="m9 18 6-6-6-6"/>
             </svg>
           </button>
+          {#if $stats.last_email_at}
+            <div class="last-sync-info" title="Last email ingested: {$stats.last_email_at}">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+              </svg>
+              <span>Last: {formatRelativeTime($stats.last_email_at)}</span>
+            </div>
+          {/if}
           <button
             class="source-item clickable"
             on:click={() => exploreDataSource('documents')}
@@ -578,7 +681,6 @@
     </div>
 
     <!-- Clusters Section -->
-    {#if $clusters.length > 0}
     <div class="section">
       <button class="section-header" on:click={() => toggleSection('clusters')}>
         <svg class="chevron" class:expanded={expandedSections.clusters} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -599,23 +701,45 @@
       </button>
       {#if expandedSections.clusters}
         <div class="section-content clusters">
-          {#each $clusters.slice(0, 10) as cluster}
-            <button
-              class="cluster-item"
-              on:click={() => exploreCluster(cluster)}
-              title="{cluster.document_count} documents"
-            >
-              <span class="cluster-label">{cluster.label}</span>
-              <span class="cluster-count">{cluster.document_count}</span>
-            </button>
-          {/each}
-          {#if $clusters.length > 10}
-            <div class="more-hint">+{$clusters.length - 10} more topics</div>
+          {#if $clusters.length === 0}
+            <div class="empty-clusters">
+              <p class="empty-hint">No topic clusters yet</p>
+              <button
+                class="rebuild-clusters-btn"
+                on:click={handleRebuildClusters}
+                disabled={!$daemonConnected || isRebuildingClusters}
+                title="Generate topic clusters from your documents"
+              >
+                {#if isRebuildingClusters}
+                  <span class="spinner"></span>
+                  Analyzing...
+                {:else}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                  </svg>
+                  Generate Topics
+                {/if}
+              </button>
+              <p class="cluster-help">Requires 10+ documents</p>
+            </div>
+          {:else}
+            {#each $clusters.slice(0, 10) as cluster}
+              <button
+                class="cluster-item"
+                on:click={() => exploreCluster(cluster)}
+                title="{cluster.document_count} documents"
+              >
+                <span class="cluster-label">{cluster.label}</span>
+                <span class="cluster-count">{cluster.document_count}</span>
+              </button>
+            {/each}
+            {#if $clusters.length > 10}
+              <div class="more-hint">+{$clusters.length - 10} more topics</div>
+            {/if}
           {/if}
         </div>
       {/if}
     </div>
-    {/if}
 
     <!-- Saved Folders Section -->
     <div class="section">
@@ -757,12 +881,12 @@
 
   .title {
     font-weight: 700;
-    font-size: 16px;
+    font-size: 18px;
     color: var(--text-primary);
   }
 
   .subtitle {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--accent-orange);
     font-weight: 600;
   }
@@ -792,16 +916,20 @@
     background: currentColor;
   }
 
+  .control-buttons {
+    display: flex;
+    gap: 4px;
+  }
+
   .connect-btn {
     display: flex;
     align-items: center;
-    gap: 6px;
+    justify-content: center;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-color);
     color: var(--text-secondary);
-    padding: 5px 10px;
+    padding: 6px 8px;
     border-radius: var(--radius);
-    font-size: 11px;
     cursor: pointer;
     transition: all 0.2s;
   }
@@ -812,6 +940,26 @@
     color: white;
   }
 
+  .restart-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 6px 8px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .restart-btn:hover:not(:disabled) {
+    background: var(--accent-red);
+    border-color: var(--accent-red);
+    color: white;
+  }
+
+  .restart-btn:disabled,
   .connect-btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;
@@ -914,12 +1062,12 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 12px;
+    padding: 12px 14px;
     background: transparent;
     border: none;
     border-radius: var(--radius);
     color: var(--text-secondary);
-    font-size: 14px;
+    font-size: 15px;
     text-align: left;
     transition: all 0.2s;
   }
@@ -984,13 +1132,13 @@
   }
 
   .stat-value {
-    font-size: 18px;
+    font-size: 22px;
     font-weight: 700;
     color: var(--text-primary);
   }
 
   .stat-label {
-    font-size: 10px;
+    font-size: 12px;
     color: var(--text-muted);
     text-transform: uppercase;
   }
@@ -1010,12 +1158,12 @@
     align-items: center;
     gap: 8px;
     width: 100%;
-    padding: 8px 10px;
+    padding: 10px 12px;
     background: transparent;
     border: none;
     border-radius: var(--radius);
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: 14px;
     text-align: left;
     cursor: pointer;
     transition: all 0.2s;
@@ -1107,7 +1255,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 13px;
+    font-size: 14px;
     color: var(--text-secondary);
     width: 100%;
     background: transparent;
@@ -1157,6 +1305,48 @@
     color: var(--text-muted);
   }
 
+  .last-sync-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px 4px 24px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .last-sync-info svg {
+    opacity: 0.6;
+  }
+
+  .last-sync-info span {
+    opacity: 0.8;
+  }
+
+  .last-sync-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    margin: 0 10px 10px 10px;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--accent-blue);
+  }
+
+  .last-sync-banner svg {
+    flex-shrink: 0;
+  }
+
+  .last-sync-banner .sync-text {
+    color: var(--text-secondary);
+  }
+
+  .last-sync-banner .sync-text strong {
+    color: var(--accent-blue);
+  }
+
   /* Cluster Styles */
   .section-content.clusters {
     display: flex;
@@ -1168,11 +1358,11 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 12px;
+    padding: 10px 14px;
     background: transparent;
     border: 1px solid var(--border-color);
     border-radius: var(--radius);
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text-secondary);
     cursor: pointer;
     transition: all 0.2s;
@@ -1370,6 +1560,46 @@
   .add-folder-link:hover {
     border-color: var(--accent-orange);
     color: var(--accent-orange);
+  }
+
+  /* Empty clusters section */
+  .empty-clusters {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+  }
+
+  .rebuild-clusters-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: var(--accent-orange);
+    border: none;
+    border-radius: var(--radius);
+    color: white;
+    font-size: 12px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .rebuild-clusters-btn:hover:not(:disabled) {
+    background: #ea580c;
+  }
+
+  .rebuild-clusters-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .cluster-help {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin: 0;
   }
 
 </style>

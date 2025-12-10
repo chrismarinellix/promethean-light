@@ -194,3 +194,18 @@ class ChatMessage(SQLModel, table=True):
 
     # Relationship
     conversation: ChatConversation = Relationship(back_populates="messages")
+
+
+class SavedSearch(SQLModel, table=True):
+    """Saved searches/queries with responses"""
+
+    __tablename__ = "saved_searches"
+
+    id: int = Field(default=None, primary_key=True)
+    folder: str = Field(default="general", index=True)  # Folder name for organization
+    query: str  # The search query
+    response: str  # The response/answer
+    sources: Optional[str] = None  # JSON array of source documents
+
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)

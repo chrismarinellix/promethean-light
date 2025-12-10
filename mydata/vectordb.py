@@ -36,9 +36,9 @@ class VectorDB:
                 collection_name=self.collection_name,
                 vectors_config=VectorParams(size=dimension, distance=Distance.COSINE),
             )
-            print(f"✓ Created Qdrant collection: {self.collection_name}")
+            print(f"[OK] Created Qdrant collection: {self.collection_name}")
         else:
-            print(f"✓ Using existing Qdrant collection: {self.collection_name}")
+            print(f"[OK] Using existing Qdrant collection: {self.collection_name}")
 
         self._initialized = True
 

@@ -42,12 +42,32 @@ class Config:
     CACHE_MAX_SIZE: int = int(os.getenv("CACHE_MAX_SIZE", "1000"))
 
     # File Watcher
-    WATCH_DIRECTORIES: List[Path] = [
-        Path(d.strip()) for d in os.getenv(
-            "WATCH_DIRECTORIES",
-            f"{Path.home()}/Documents,{Path.home()}/Downloads"
-        ).split(",")
-    ]
+    @staticmethod
+    def _load_watch_directories() -> List[Path]:
+        """Load watch directories from config file or environment."""
+        # First check environment variable
+        env_dirs = os.getenv("WATCH_DIRECTORIES")
+        if env_dirs:
+            return [Path(d.strip()) for d in env_dirs.split(",") if d.strip()]
+
+        # Then check config file
+        config_file = Path.home() / ".mydata" / "watch_directories.txt"
+        if config_file.exists():
+            try:
+                dirs = []
+                for line in config_file.read_text().strip().split("\n"):
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        dirs.append(Path(line))
+                if dirs:
+                    return dirs
+            except Exception:
+                pass
+
+        # Default fallback
+        return [Path.home() / "Documents", Path.home() / "Downloads"]
+
+    WATCH_DIRECTORIES: List[Path] = _load_watch_directories.__func__()
     FILE_WATCHER_DEBOUNCE: float = float(os.getenv("FILE_WATCHER_DEBOUNCE", "0.5"))
 
     # Email Watcher
@@ -55,7 +75,8 @@ class Config:
     EMAIL_HISTORY_HOURS: int = int(os.getenv("EMAIL_HISTORY_HOURS", "1440"))  # 60 days
 
     # Anonymization (for LLM context protection)
-    ENABLE_LLM_ANONYMIZATION: bool = os.getenv("ENABLE_LLM_ANONYMIZATION", "true").lower() == "true"
+    # Set to "false" to send real names to OpenAI (better answers but less privacy)
+    ENABLE_LLM_ANONYMIZATION: bool = os.getenv("ENABLE_LLM_ANONYMIZATION", "false").lower() == "true"
     USE_SPACY_NER: bool = os.getenv("USE_SPACY_NER", "true").lower() == "true"
     SPACY_MODEL: str = os.getenv("SPACY_MODEL", "en_core_web_sm")
     KNOWN_CLIENTS: List[str] = [

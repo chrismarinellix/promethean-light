@@ -1,0 +1,2365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Team Burn Rate Dashboard - All 15 Members</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .dashboard {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            color: #1a202c;
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .header .subtitle {
+            color: #718096;
+            font-size: 16px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .tab-button {
+            background: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            color: #4a5568;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: all 0.2s;
+        }
+
+        .tab-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        .tab-button.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .metric-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .metric-card .label {
+            color: #718096;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .metric-card .value {
+            color: #1a202c;
+            font-size: 32px;
+            font-weight: bold;
+        }
+
+        .metric-card .subvalue {
+            color: #4299e1;
+            font-size: 14px;
+            margin-top: 4px;
+        }
+
+        .chart-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .chart-card h2 {
+            color: #1a202c;
+            font-size: 20px;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .employee-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .employee-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .employee-card .name {
+            color: #1a202c;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .employee-card .position {
+            color: #718096;
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+
+        .employee-card .stat {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .employee-card .stat:last-child {
+            border-bottom: none;
+        }
+
+        .employee-card .stat .label {
+            color: #4a5568;
+            font-size: 14px;
+        }
+
+        .employee-card .stat .value {
+            color: #1a202c;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .utilization-bar {
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 4px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+
+        .utilization-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #48bb78 0%, #38a169 100%);
+            transition: width 0.3s;
+        }
+
+        .utilization-fill.low {
+            background: linear-gradient(90deg, #f56565 0%, #e53e3e 100%);
+        }
+
+        .utilization-fill.medium {
+            background: linear-gradient(90deg, #ecc94b 0%, #d69e2e 100%);
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: #f7fafc;
+            padding: 12px;
+            text-align: left;
+            color: #4a5568;
+            font-weight: 600;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #e2e8f0;
+            position: sticky;
+            top: 0;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #e2e8f0;
+            color: #2d3748;
+        }
+
+        tr:hover {
+            background: #f7fafc;
+        }
+
+        .project-list {
+            font-size: 12px;
+            color: #4a5568;
+            margin-top: 8px;
+        }
+
+        .project-item {
+            padding: 4px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // Embedded data
+        const DASHBOARD_DATA = {
+  "summary": {
+    "totalHours": 57895.5,
+    "billableHours": 36594.46,
+    "utilization": 63.2,
+    "totalCost": 7734004.12,
+    "totalRevenue": 10028274.84,
+    "numProjects": 108,
+    "numEmployees": 15,
+    "avgDailyHours": 8270.79,
+    "dateRange": "Nov 16 - Nov 23, 2025"
+  },
+  "employees": [
+    {
+      "name": "Anthony Morton",
+      "position": "Global Tech Head Power Engineering",
+      "totalHours": 8005.6,
+      "billableHours": 2828.39,
+      "utilization": 35.3,
+      "revenue": 1016329.92,
+      "numProjects": 98,
+      "projects": [
+        {
+          "project": "SL24-680AU",
+          "description": "Service Lines - FY24 - 680AU",
+          "hours": 1118.6,
+          "revenue": 1990.09
+        },
+        {
+          "project": "SL22-680AU",
+          "description": "Service Lines - FY22 - 680AU",
+          "hours": 1080.0,
+          "revenue": 1686.99
+        },
+        {
+          "project": "SL25-680AU",
+          "description": "Service Lines - FY25 - 680AU",
+          "hours": 919.9,
+          "revenue": 1007.23
+        },
+        {
+          "project": "SL23-680AU",
+          "description": "Service Lines - FY23 - 680AU",
+          "hours": 854.7,
+          "revenue": 2164.16
+        },
+        {
+          "project": "SL21-680AU",
+          "description": "Service Lines - FY21 - 680AU",
+          "hours": 662.4,
+          "revenue": 625.01
+        },
+        {
+          "project": "GRD0500063",
+          "description": "AEMO-BESS Droop Analysis ",
+          "hours": 380.0,
+          "revenue": 147390.0
+        },
+        {
+          "project": "GRD0500017",
+          "description": "GRID Forming Battery Impact Studies",
+          "hours": 264.0,
+          "revenue": 31500.0
+        },
+        {
+          "project": "GRD0500093",
+          "description": "Danfoss NXP Inverter PSS/E Dynamic ",
+          "hours": 196.0,
+          "revenue": 78400.0
+        },
+        {
+          "project": "GRD0500079",
+          "description": "Sandy Creek Solar Farm & BESS",
+          "hours": 192.0,
+          "revenue": 75600.0
+        },
+        {
+          "project": "GRD0500026",
+          "description": "Armidale BESS Connection Studies",
+          "hours": 152.5,
+          "revenue": 52778.2
+        }
+      ],
+      "activities": [
+        {
+          "activity": "General Time",
+          "hours": 1844.3
+        },
+        {
+          "activity": "Meetings",
+          "hours": 1030.4
+        },
+        {
+          "activity": "Management",
+          "hours": 503.1
+        },
+        {
+          "activity": "Innovation and Development",
+          "hours": 455.9
+        },
+        {
+          "activity": "Tendering",
+          "hours": 319.3
+        }
+      ],
+      "billing": [
+        {
+          "type": "Fixed Price Chargeable Hours",
+          "hours": 923.0,
+          "percentage": 11.5
+        },
+        {
+          "type": "Hourly Charge Rate",
+          "hours": 1841.39,
+          "percentage": 23.0
+        },
+        {
+          "type": "Non-Chargeable Activity",
+          "hours": 5146.21,
+          "percentage": 64.3
+        },
+        {
+          "type": "Reimbursable Expenses",
+          "hours": 95.0,
+          "percentage": 1.2
+        }
+      ]
+    },
+    {
+      "name": "Eduardo Jr Laygo",
+      "position": "Senior Power Systems Engineer",
+      "totalHours": 7616.65,
+      "billableHours": 4946.75,
+      "utilization": 64.9,
+      "revenue": 1484792.77,
+      "numProjects": 47,
+      "projects": [
+        {
+          "project": "GRD0500022",
+          "description": "Tailem Bend 2 Hybrid Solar Farm",
+          "hours": 1215.75,
+          "revenue": 280707.25
+        },
+        {
+          "project": "GRD0500078",
+          "description": "Upper Calliope Solar Farm",
+          "hours": 1168.55,
+          "revenue": 361741.25
+        },
+        {
+          "project": "GRD0500068",
+          "description": "Wellington North Solar Farm",
+          "hours": 911.2,
+          "revenue": 258587.5
+        },
+        {
+          "project": "X90184",
+          "description": "Boulder Creek Wind Farm Due Diligen",
+          "hours": 461.75,
+          "revenue": 69747.23
+        },
+        {
+          "project": "SL22-680AU",
+          "description": "Service Lines - FY22 - 680AU",
+          "hours": 424.1,
+          "revenue": 240.0
+        },
+        {
+          "project": "SL23-680AU",
+          "description": "Service Lines - FY23 - 680AU",
+          "hours": 419.7,
+          "revenue": 2337.54
+        },
+        {
+          "project": "GRD0500080",
+          "description": "Wellington North SF-Comm Support",
+          "hours": 416.35,
+          "revenue": 128366.25
+        },
+        {
+          "project": "SL24-680AU",
+          "description": "Service Lines - FY24 - 680AU",
+          "hours": 409.7,
+          "revenue": 1892.0
+        },
+        {
+          "project": "X90087",
+          "description": "PRJ1109992247",
+          "hours": 342.9,
+          "revenue": 68469.5
+        },
+        {
+          "project": "SL25-680AU",
+          "description": "Service Lines - FY25 - 680AU",
+          "hours": 330.1,
+          "revenue": 1345.0
+        }
+      ],
+      "activities": [
+        {
+          "activity": "General Time",
+          "hours": 1029.95
+        },
+        {
+          "activity": "Technical & Regulatory Connection Suppor",
+          "hours": 976.4
+        },
+        {
+          "activity": "Management",
+          "hours": 549.7
+        },
+        {
+          "activity": "Site-Specific Tuning-PSCAD & PSSE (T&E)",
+          "hours": 399.5
+        },
+        {
+          "activity": "First Inverter - Minimum Stable SCR Dete",
+          "hours": 254.1
+        }
+      ],
+      "billing": [
+        {
+          "type": "Fixed Price Chargeable Hours",
+          "hours": 1729.5,
+          "percentage": 22.7
+        },
+        {
+          "type": "Hourly Charge Rate",
+          "hours": 3306.25,
+          "percentage": 43.4
+        },
+        {
+          "type": "Non-Chargeable Activity",
+          "hours": 2563.9,
+          "percentage": 33.7
+        },
+        {
+          "type": "Reimbursable Expenses",
+          "hours": 17.0,
+          "percentage": 0.2
+        }
+      ]
+    },
+    {
+      "name": "Naveenkumar Rajagopal",
+      "position": "Multi Company Project Staff",
+      "totalHours": 5623.0,
+      "billableHours": 4361.45,
+      "utilization": 77.6,
+      "revenue": 1284494.75,
+      "numProjects": 29,
+      "projects": [
+        {
+          "project": "GRD0500043",
+          "description": "Corop SF & BESS Connection Study",
+          "hours": 1393.25,
+          "revenue": 235000.0
+        },
+        {
+          "project": "GRD0500055",
+          "description": "Brinkworth BESS Connection Studies",
+          "hours": 1027.0,
+          "revenue": 266257.5
+        },
+        {
+          "project": "GRD0500048",
+          "description": "Bookaar Solar Farm-R0 Studies & Con",
+          "hours": 627.5,
+          "revenue": 168740.0
+        },
+        {
+          "project": "GRD0500082",
+          "description": "Templers West BESS",
+          "hours": 506.15,
+          "revenue": 165279.75
+        },
+        {
+          "project": "X90151",
+          "description": "Wellington North SF-R0 Connection s",
+          "hours": 386.5,
+          "revenue": 70505.0
+        },
+        {
+          "project": "GRD0500061",
+          "description": "Birdwood Energy Reserve",
+          "hours": 360.9,
+          "revenue": 110737.5
+        },
+        {
+          "project": "GRD0500089",
+          "description": "Yanco Delta Wind Farm-R0 Grid Study",
+          "hours": 286.5,
+          "revenue": 92413.75
+        },
+        {
+          "project": "X90192",
+          "description": "Hay Solar Farm Connection Studies",
+          "hours": 269.5,
+          "revenue": 37022.5
+        },
+        {
+          "project": "SL25-680AU",
+          "description": "Service Lines - FY25 - 680AU",
+          "hours": 146.05,
+          "revenue": 0.0
+        },
+        {
+          "project": "GRD0500006",
+          "description": "Orange Grove SF Connection Study",
+          "hours": 142.0,
+          "revenue": 5752.5
+        }
+      ],
+      "activities": [
+        {
+          "activity": "Technical & Regulatory Connection Suppor",
+          "hours": 657.75
+        },
+        {
+          "activity": "Technical & Regulatory Connection Suppor",
+          "hours": 586.15
+        },
+        {
+          "activity": "Technical & Regulatory Connection Suppor",
+          "hours": 408.4
+        },
+        {
+          "activity": "Dynamic Studies (Fixed)",
+          "hours": 257.0
+        },
+        {
+          "activity": "PSCAD Site Specific Tuning (Fixed)",
+          "hours": 173.1
+        }
+      ],
+      "billing": [
+        {
+          "type": "Fixed Price Chargeable Hours",
+          "hours": 2382.65,
+          "percentage": 42.4
+        },
+        {
+          "type": "Hourly Charge Rate",
+          "hours": 2021.05,
+          "percentage": 35.9
+        },
+        {
+          "type": "Non-Chargeable Activity",
+          "hours": 1218.3,
+          "percentage": 21.7
+        },
+        {
+          "type": "Reimbursable Expenses",
+          "hours": 1.0,
+          "percentage": 0.0
+        }
+      ]
+    },
+    {
+      "name": "Parthena Savvidis",
+      "position": "Team Administrator & Office Manager",
+      "totalHours": 5400.75,
+      "billableHours": 1130.0,
+      "utilization": 20.9,
+      "revenue": 261079.39,
+      "numProjects": 6,
+      "projects": [
+        {
+          "project": "SL23-680AU",
+          "description": "Service Lines - FY23 - 680AU",
+          "hours": 1285.0,
+          "revenue": 72444.18
+        },
+        {
+          "project": "SL25-680AU",
+          "description": "Service Lines - FY25 - 680AU",
+          "hours": 1248.75,
+          "revenue": 53875.08
+        },
+        {
+          "project": "SL24-680AU",
+          "description": "Service Lines - FY24 - 680AU",
+          "hours": 1207.0,
+          "revenue": 79602.42
+        },
+        {
+          "project": "SL22-680AU",
+          "description": "Service Lines - FY22 - 680AU",
+          "hours": 1165.0,
+          "revenue": 43469.9
+        },
+        {
+          "project": "SL21-680AU",
+          "description": "Service Lines - FY21 - 680AU",
+          "hours": 490.0,
+          "revenue": 5392.12
+        },
+        {
+          "project": "GRD0500050",
+          "description": "NER Chapter 5 PSS/E Dynamic Studies",
+          "hours": 5.0,
+          "revenue": 6295.69
+        }
+      ],
+      "activities": [
+        {
+          "activity": "General Time",
+          "hours": 2380.0
+        },
+        {
+          "activity": "Management",
+          "hours": 1495.75
+        },
+        {
+          "activity": "Employee Expenses",
+          "hours": 1148.0
+        },
+        {
+          "activity": "Available (Not Billable)",
+          "hours": 372.0
+        },
+        {
+          "activity": "Expenses Budget",
+          "hours": 5.0
+        }
+      ],
+      "billing": [
+        {
+          "type": "Non-Chargeable Activity",
+          "hours": 4247.75,
+          "percentage": 78.7
+        },
+        {
+          "type": "Reimbursable Expenses",
+          "hours": 1153.0,
+          "percentage": 21.3
+        }
+      ]
+    },
+    {
+      "name": "Md Momtazur Rahman",
+      "position": "Power Systems Engineer",
+      "totalHours": 5102.55,
+      "billableHours": 4057.43,
+      "utilization": 79.5,
+      "revenue": 990994.42,
+      "numProjects": 30,
+      "projects": [
+        {
+          "project": "GRD0500090",
+          "description": "Gerogery Solar Farm & BESS Project",
+          "hours": 923.3,
+          "revenue": 230841.5
+        },
+        {
+          "project": "GRD0500066",
+          "description": "Blacktop-BESS OFFICER Project ",
+          "hours": 698.05,
+          "revenue": 140377.5
+        },
+        {
+          "project": "GRD0500069",
+          "description": "Whyalla BESS Inverter Units",
+          "hours": 629.05,
+          "revenue": 151431.75
+        },
+        {
+          "project": "GRD0500079",
+          "description": "Sandy Creek Solar Farm & BESS",
+          "hours": 423.0,
+          "revenue": 86499.5
+        },
+        {
+          "project": "GRD0500013",
+          "description": "Phillip Island BESS R1 and R2",
+          "hours": 360.4,
+          "revenue": 85848.0
+        },
+        {
+          "project": "SL23-680AU",
+          "description": "Service Lines - FY23 - 680AU",
+          "hours": 353.68,
+          "revenue": 0.0
+        },
+        {
+          "project": "GRD0500022",
+          "description": "Tailem Bend 2 Hybrid Solar Farm",
+          "hours": 353.23,
+          "revenue": 67400.73
+        },
+        {
+          "project": "X90105",
+          "description": "Limondale 1 - Pre-Reg,Commissioning",
+          "hours": 227.85,
+          "revenue": 49776.0
+        },
+        {
+          "project": "SL24-680AU",
+          "description": "Service Lines - FY24 - 680AU",
+          "hours": 181.59,
+          "revenue": 1292.5
+        },
+        {
+          "project": "GRD0500026",
+          "description": "Armidale BESS Connection Studies",
+          "hours": 105.0,
+          "revenue": 10200.0
+        }
+      ],
+      "activities": [
+        {
+          "activity": "Technical & Regulatory Connection Suppor",
+          "hours": 484.12
+        },
+        {
+          "activity": "Technical & Regulatory Connection Suppor",
+          "hours": 319.8
+        },
+        {
+          "activity": "PSCAD and PSS/E Dynamic Model Acceptance",
+          "hours": 224.1
+        },
+        {
+          "activity": "General Time",
+          "hours": 212.37
+        },
+        {
+          "activity": "PSCAD Site-Specific Tuning (T&E)",
+          "hours": 196.3
+        }
+      ],
+      "billing": [
+        {
+          "type": "Fixed Price Chargeable Hours",
+          "hours": 1988.07,
+          "percentage": 39.0
+        },
+        {
+          "type": "Hourly Charge Rate",
+          "hours": 1834.09,
+          "percentage": 35.9
+        },
+        {
+          "type": "Non-Chargeable Activity",
+          "hours": 1277.39,
+          "percentage": 25.0
+        },
+        {
+          "type": "Reimbursable Expenses",
+          "hours": 3.0,
+          "percentage": 0.1
+        }
+      ]
+    },
+    {
+      "name": "Amani Syafiqah binti Mohd Razif",
+      "position": "Multi Company Project Staff",
+      "totalHours": 4231.85,
+      "billableHours": 3995.75,
+      "utilization": 94.4,
+      "revenue": 1022530.75,
+      "numProjects": 21,
+      "projects": [
+        {
+          "project": "GRD0500061",
+          "description": "Birdwood Energy Reserve",
+          "hours": 798.05,
+          "revenue": 159983.25
+        },
+        {
+          "project": "GRD0500090",
+          "description": "Gerogery Solar Farm & BESS Project",
+          "hours": 770.7,
+          "revenue": 204235.5
+        },
+        {
+          "project": "GRD0500055",
+          "description": "Brinkworth BESS Connection Studies",
+          "hours": 604.5,
+          "revenue": 155227.5
+        },
+        {
+          "project": "GRD0500082",
+          "description": "Templers West BESS",
+          "hours": 576.5,
+          "revenue": 147552.0
+        },
+        {
+          "project": "GRD0500062",
+          "description": "Amcor Glass Bottle Manufacturing",
+          "hours": 315.5,
+          "revenue": 77520.0
+        },
+        {
+          "project": "GRD0500089",
+          "description": "Yanco Delta Wind Farm-R0 Grid Study",
+          "hours": 240.7,
+          "revenue": 64145.5
+        },
+        {
+          "project": "GRD0500048",
+          "description": "Bookaar Solar Farm-R0 Studies & Con",
+          "hours": 204.6,
+          "revenue": 52173.0
+        },
+        {
+          "project": "GRD0500069",
+          "description": "Whyalla BESS Inverter Units",
+          "hours": 160.5,
+          "revenue": 30090.0
+        },
+        {
+          "project": "GRD0500075",
+          "description": "Mannum Solar Farm-Due Diligence Stu",
+          "hours": 144.0,
+          "revenue": 33120.0
+        },
+        {
+          "project": "GRD0500023",
+          "description": "Tamworth BESS Connection Studies",
+          "hours": 104.5,
+          "revenue": 26647.5
+        }
+      ],
+      "activities": [
+        {
+          "activity": "Base Case Preparation (Fixed)",
+          "hours": 874.7
+        },
+        {
+          "activity": "Dynamic Studies (Fixed)",
+          "hours": 694.1
+        },
+        {
+          "activity": "Technical & Regulatory Connection Suppor",
+          "hours": 420.55
+        },
+        {
+          "activity": "Power Quality Assessment (Fixed)",
+          "hours": 302.0
+        },
+        {
+          "activity": "Static Studies (Fixed)",
+          "hours": 247.0
+        }
+      ],
+      "billing": [
+        {
+          "type": "Fixed Price Chargeable Hours",
+          "hours": 3501.3,
+          "percentage": 82.7
+        },
+        {
+          "type": "Hourly Charge Rate",
+          "hours": 450.45,
+          "percentage": 10.6
+        },
+        {
+          "type": "Non-Chargeable Activity",
+          "hours": 280.1,
+          "percentage": 6.6
+        }
+      ]
+    },
+    {
+      "name": "Shahrul Azri Mohammad Faudzi",
+      "position": "Multi Company Project Staff",
+      "totalHours": 4192.5,
+      "billableHours": 3387.2,
+      "utilization": 80.8,
+      "revenue": 746571.95,
+      "numProjects": 25,
+      "projects": [
+        {
+          "project": "X90158",
+          "description": "George Town SF-R0 Connection Applic",
+          "hours": 1019.5,
+          "revenue": 144652.5
+        },
+        {
+          "project": "GRD0500084",
+          "description": "Morgan-Riverland SF & BESS Due",
+          "hours": 636.75,
+          "revenue": 105687.5
+        },
+        {
+          "project": "GRD0500043",
+          "description": "Corop SF & BESS Connection Study",
+          "hours": 513.75,
+          "revenue": 52912.5
+        },
+        {
+          "project": "GRD0500060",
+          "description": "Inverleigh Wind Farm-Static Studies",
+          "hours": 376.5,
+          "revenue": 87847.5
+        },
+        {
+          "project": "GRD0500058",
+          "description": "Columboola BESS-Connection studies",
+          "hours": 294.0,
+          "revenue": 74715.0
+        },
+        {
+          "project": "X90119",
+          "description": "Emerald Solar Farm",
+          "hours": 273.0,
+          "revenue": 46218.75
+        },
+        {
+          "project": "X90627",
+          "description": "Robertstown Solar Farm and BESS Pro",
+          "hours": 237.0,
+          "revenue": 42092.2
+        },
+        {
+          "project": "X90120",
+          "description": "Bomen SF - Pre-Reg, Commissioning &",
+          "hours": 189.0,
+          "revenue": 36082.5
+        },
+        {
+          "project": "GRD0500061",
+          "description": "Birdwood Energy Reserve",
+          "hours": 103.0,
+          "revenue": 17212.5
+        },
+        {
+          "project": "GRD0500104",
+          "description": "Markaranka BESS",
+          "hours": 94.5,
+          "revenue": 25042.5
+        }
+      ],
+      "activities": [
+        {
+          "activity": "First round of due diligence - Review/PS",
+          "hours": 636.75
+        },
+        {
+          "activity": "Model Acceptance Testing (T&E)",
+          "hours": 572.0
+        },
+        {
+          "activity": "Base Case Preparation (Fixed)",
+          "hours": 365.5
+        },
+        {
+          "activity": "Technical & Regulatory Connection Suppor",
+          "hours": 286.75
+        },
+        {
+          "activity": "Task 2.14-Tech&Reg Connection Supp (T&E)",
+          "hours": 237.0
+        }
+      ],
+      "billing": [
+        {
+          "type": "Fixed Price Chargeable Hours",
+          "hours": 1270.0,
+          "percentage": 30.3
+        },
+        {
+          "type": "Hourly Charge Rate",
+          "hours": 1678.44,
+          "percentage": 40.0
+        },
+        {
+          "type": "Non-Chargeable Activity",
+          "hours": 1244.06,
+          "percentage": 29.7
+        }
+      ]
+    },
+    {
+      "name": "Mohammed Arif Kandanari Nathar",
+      "position": "Multi Company Project Staff",
+      "totalHours": 2837.75,
+      "billableHours": 2662.25,
+      "utilization": 93.8,
+      "revenue": 794398.75,
+      "numProjects": 7,
+      "projects": [
+        {
+          "project": "GRD0500061",
+          "description": "Birdwood Energy Reserve",
+          "hours": 1683.5,
+          "revenue": 445155.0
+        },
+        {
+          "project": "GRD0500089",
+          "description": "Yanco Delta Wind Farm-R0 Grid Study",
+          "hours": 466.75,
+          "revenue": 142358.75
+        },
+        {
+          "project": "GRD0500082",
+          "description": "Templers West BESS",
+          "hours": 381.75,
+          "revenue": 116128.75
+        },
+        {
+          "project": "GRD0500023",
+          "description": "Tamworth BESS Connection Studies",
+          "hours": 162.75,
+          "revenue": 48011.25
+        },
+        {
+          "project": "GRD0500086",
+          "description": "WF System Strength Remediation Sty",
+          "hours": 120.0,
+          "revenue": 36600.0
+        },
+        {
+          "project": "GRD0500055",
+          "description": "Brinkworth BESS Connection Studies",
+          "hours": 16.0,
+          "revenue": 4080.0
+        },
+        {
+          "project": "GRD0500078",
+          "description": "Upper Calliope Solar Farm",
+          "hours": 7.0,
+          "revenue": 2065.0
+        }
+      ],
+      "activities": [
+        {
+          "activity": "Technical & Regulatory Connection Suppor",
+          "hours": 1204.0
+        },
+        {
+          "activity": "PSS/E and PSCAD Dynamic Model Assessment",
+          "hours": 214.25
+        },
+        {
+          "activity": "OEM1-Model Resolution & Auxiliary Plant ",
+          "hours": 169.5
+        },
+        {
+          "activity": "Technical & Regulatory Connection Suppor",
+          "hours": 125.5
+        },
+        {
+          "activity": "PSS/E-PSCAD Benchmarking (Fixed)",
+          "hours": 124.25
+        }
+      ],
+      "billing": [
+        {
+          "type": "Fixed Price Chargeable Hours",
+          "hours": 1156.25,
+          "percentage": 40.7
+        },
+        {
+          "type": "Hourly Charge Rate",
+          "hours": 1506.0,
+          "percentage": 53.1
+        },
+        {
+          "type": "Non-Chargeable Activity",
+          "hours": 175.5,
+          "percentage": 6.2
+        }
+      ]
+    },
+    {
+      "name": "Chris Marinelli",
+      "position": "Program Manager",
+      "totalHours": 2823.1,
+      "billableHours": 519.39,
+      "utilization": 18.4,
+      "revenue": 153054.6,
+      "numProjects": 31,
+      "projects": [
+        {
+          "project": "SL24-680AU",
+          "description": "Service Lines - FY24 - 680AU",
+          "hours": 1221.8,
+          "revenue": 492.9
+        },
+        {
+          "project": "SL25-680AU",
+          "description": "Service Lines - FY25 - 680AU",
+          "hours": 1082.81,
+          "revenue": 565.0
+        },
+        {
+          "project": "GRD0500087",
+          "description": "Haughton BESS Grid Connection Studi",
+          "hours": 56.75,
+          "revenue": 17308.75
+        },
+        {
+          "project": "GRD0500090",
+          "description": "Gerogery Solar Farm & BESS Project",
+          "hours": 48.6,
+          "revenue": 14823.0
+        },
+        {
+          "project": "GRD0500078",
+          "description": "Upper Calliope Solar Farm",
+          "hours": 45.65,
+          "revenue": 13171.75
+        },
+        {
+          "project": "GRD0500089",
+          "description": "Yanco Delta Wind Farm-R0 Grid Study",
+          "hours": 41.0,
+          "revenue": 12505.0
+        },
+        {
+          "project": "GRD0500079",
+          "description": "Sandy Creek Solar Farm & BESS",
+          "hours": 36.6,
+          "revenue": 10797.0
+        },
+        {
+          "project": "GRD0500082",
+          "description": "Templers West BESS",
+          "hours": 36.54,
+          "revenue": 11144.7
+        },
+        {
+          "project": "GRD0500026",
+          "description": "Armidale BESS Connection Studies",
+          "hours": 30.55,
+          "revenue": 7212.75
+        },
+        {
+          "project": "GRD0500096",
+          "description": "Boulder Creek WF - R1 Registration",
+          "hours": 29.35,
+          "revenue": 8951.75
+        }
+      ],
+      "activities": [
+        {
+          "activity": "Management",
+          "hours": 2188.21
+        },
+        {
+          "activity": "Project Management (T&E)",
+          "hours": 244.4
+        },
+        {
+          "activity": "Training",
+          "hours": 105.4
+        },
+        {
+          "activity": "Technical & Regulatory Connection Suppor",
+          "hours": 67.59
+        },
+        {
+          "activity": "Project Management (T&E) ",
+          "hours": 44.65
+        }
+      ],
+      "billing": [
+        {
+          "type": "Fixed Price Chargeable Hours",
+          "hours": 3.0,
+          "percentage": 0.1
+        },
+        {
+          "type": "Hourly Charge Rate",
+          "hours": 503.39,
+          "percentage": 17.8
+        },
+        {
+          "type": "Non-Chargeable Activity",
+          "hours": 2305.71,
+          "percentage": 81.7
+        },
+        {
+          "type": "Reimbursable Expenses",
+          "hours": 11.0,
+          "percentage": 0.4
+        }
+      ]
+    },
+    {
+      "name": "Zabir Uddin Hussainy Syed",
+      "position": "Power Systems Engineer",
+      "totalHours": 2673.7,
+      "billableHours": 2173.4,
+      "utilization": 81.3,
+      "revenue": 582995.16,
+      "numProjects": 17,
+      "projects": [
+        {
+          "project": "X90192",
+          "description": "Hay Solar Farm Connection Studies",
+          "hours": 688.4,
+          "revenue": 172943.0
+        },
+        {
+          "project": "GRD0500043",
+          "description": "Corop SF & BESS Connection Study",
+          "hours": 578.3,
+          "revenue": 185347.5
+        },
+        {
+          "project": "GRD0500055",
+          "description": "Brinkworth BESS Connection Studies",
+          "hours": 346.8,
+          "revenue": 100746.0
+        },
+        {
+          "project": "SL22-680AU",
+          "description": "Service Lines - FY22 - 680AU",
+          "hours": 290.8,
+          "revenue": 998.87
+        },
+        {
+          "project": "SL23-680AU",
+          "description": "Service Lines - FY23 - 680AU",
+          "hours": 272.1,
+          "revenue": 624.29
+        },
+        {
+          "project": "GRD0500048",
+          "description": "Bookaar Solar Farm-R0 Studies & Con",
+          "hours": 156.6,
+          "revenue": 45477.0
+        },
+        {
+          "project": "GRD0500045",
+          "description": "Lancefield SF & BESS Grid Study",
+          "hours": 90.6,
+          "revenue": 23103.0
+        },
+        {
+          "project": "X90220",
+          "description": "Argyle SF Connection Studies",
+          "hours": 84.2,
+          "revenue": 21471.0
+        },
+        {
+          "project": "GRD0500065",
+          "description": "South East BESS Connection Studies",
+          "hours": 64.0,
+          "revenue": 18880.0
+        },
+        {
+          "project": "SL25-680AU",
+          "description": "Service Lines - FY25 - 680AU",
+          "hours": 55.8,
+          "revenue": 0.0
+        }
+      ],
+      "activities": [
+        {
+          "activity": "Ongoing connection negotiation support (",
+          "hours": 526.2
+        },
+        {
+          "activity": "Dynamic Studies (Fixed)",
+          "hours": 336.2
+        },
+        {
+          "activity": "Meetings",
+          "hours": 257.8
+        },
+        {
+          "activity": "General Time",
+          "hours": 162.8
+        },
+        {
+          "activity": "Harmonic Assessment (Fixed)",
+          "hours": 149.0
+        }
+      ],
+      "billing": [
+        {
+          "type": "Fixed Price Chargeable Hours",
+          "hours": 1082.6,
+          "percentage": 40.5
+        },
+        {
+          "type": "Hourly Charge Rate",
+          "hours": 961.4,
+          "percentage": 36.0
+        },
+        {
+          "type": "Non-Chargeable Activity",
+          "hours": 624.7,
+          "percentage": 23.4
+        },
+        {
+          "type": "Reimbursable Expenses",
+          "hours": 5.0,
+          "percentage": 0.2
+        }
+      ]
+    },
+    {
+      "name": "Khadija Tul Kobra",
+      "position": "Power Systems Engineer ",
+      "totalHours": 2106.1,
+      "billableHours": 1729.45,
+      "utilization": 82.1,
+      "revenue": 422094.75,
+      "numProjects": 16,
+      "projects": [
+        {
+          "project": "GRD0500096",
+          "description": "Boulder Creek WF - R1 Registration",
+          "hours": 581.75,
+          "revenue": 145962.0
+        },
+        {
+          "project": "GRD0500100",
+          "description": "Clements Gap BESS R1 Due Diligence",
+          "hours": 242.35,
+          "revenue": 33062.5
+        },
+        {
+          "project": "GRD0500080",
+          "description": "Wellington North SF-Comm Support",
+          "hours": 222.35,
+          "revenue": 54952.5
+        },
+        {
+          "project": "GRD0500085",
+          "description": "Emerald Solar Farm R2 ",
+          "hours": 208.1,
+          "revenue": 54457.5
+        },
+        {
+          "project": "SL25-680AU",
+          "description": "Service Lines - FY25 - 680AU",
+          "hours": 178.75,
+          "revenue": 750.0
+        },
+        {
+          "project": "GRD0500022",
+          "description": "Tailem Bend 2 Hybrid Solar Farm",
+          "hours": 169.85,
+          "revenue": 39138.75
+        },
+        {
+          "project": "GRD0500078",
+          "description": "Upper Calliope Solar Farm",
+          "hours": 124.25,
+          "revenue": 29082.75
+        },
+        {
+          "project": "GRD0500094",
+          "description": "Wellington North SF-R2 Model Valida",
+          "hours": 109.6,
+          "revenue": 27323.25
+        },
+        {
+          "project": "SL24-680AU",
+          "description": "Service Lines - FY24 - 680AU",
+          "hours": 89.75,
+          "revenue": 0.0
+        },
+        {
+          "project": "GRD0500079",
+          "description": "Sandy Creek Solar Farm & BESS",
+          "hours": 68.1,
+          "revenue": 16766.25
+        }
+      ],
+      "activities": [
+        {
+          "activity": "Model Resolution and Auxiliary Plant Con",
+          "hours": 165.85
+        },
+        {
+          "activity": "Additional R2 Tests Overlays (Fixed)",
+          "hours": 153.55
+        },
+        {
+          "activity": "NER SMIB Studies",
+          "hours": 153.5
+        },
+        {
+          "activity": "Commissioning Issue Resolution (T&E)",
+          "hours": 152.95
+        },
+        {
+          "activity": "Task 4.2.5-TB2 Hold Point activities (x ",
+          "hours": 148.65
+        }
+      ],
+      "billing": [
+        {
+          "type": "Fixed Price Chargeable Hours",
+          "hours": 830.9,
+          "percentage": 39.5
+        },
+        {
+          "type": "Hourly Charge Rate",
+          "hours": 799.8,
+          "percentage": 38.0
+        },
+        {
+          "type": "Non-Chargeable Activity",
+          "hours": 474.4,
+          "percentage": 22.5
+        },
+        {
+          "type": "Reimbursable Expenses",
+          "hours": 1.0,
+          "percentage": 0.0
+        }
+      ]
+    },
+    {
+      "name": "Muhammad Syafiq Ishamuddin",
+      "position": "Multi Company Project Staff",
+      "totalHours": 2095.75,
+      "billableHours": 1424.0,
+      "utilization": 67.9,
+      "revenue": 369352.5,
+      "numProjects": 10,
+      "projects": [
+        {
+          "project": "GRD0500061",
+          "description": "Birdwood Energy Reserve",
+          "hours": 842.5,
+          "revenue": 116535.0
+        },
+        {
+          "project": "GRD0500089",
+          "description": "Yanco Delta Wind Farm-R0 Grid Study",
+          "hours": 302.5,
+          "revenue": 80162.5
+        },
+        {
+          "project": "GRD0500043",
+          "description": "Corop SF & BESS Connection Study",
+          "hours": 234.75,
+          "revenue": 6120.0
+        },
+        {
+          "project": "GRD0500082",
+          "description": "Templers West BESS",
+          "hours": 197.5,
+          "revenue": 47037.5
+        },
+        {
+          "project": "GRD0500096",
+          "description": "Boulder Creek WF - R1 Registration",
+          "hours": 170.5,
+          "revenue": 45182.5
+        },
+        {
+          "project": "GRD0500090",
+          "description": "Gerogery Solar Farm & BESS Project",
+          "hours": 105.5,
+          "revenue": 27957.5
+        },
+        {
+          "project": "GRD0500087",
+          "description": "Haughton BESS Grid Connection Studi",
+          "hours": 101.0,
+          "revenue": 26765.0
+        },
+        {
+          "project": "X90158",
+          "description": "George Town SF-R0 Connection Applic",
+          "hours": 70.0,
+          "revenue": 3825.0
+        },
+        {
+          "project": "GRD0500095",
+          "description": "DeLorean-Stanhope AD Plant PSS/E",
+          "hours": 63.5,
+          "revenue": 13647.5
+        },
+        {
+          "project": "GRD0500093",
+          "description": "Danfoss NXP Inverter PSS/E Dynamic ",
+          "hours": 8.0,
+          "revenue": 2120.0
+        }
+      ],
+      "activities": [
+        {
+          "activity": "Technical & Regulatory Connection Suppor",
+          "hours": 703.5
+        },
+        {
+          "activity": "Dynamic Studies (Fixed)",
+          "hours": 247.0
+        },
+        {
+          "activity": "Technical & Regulatory Connection Suppor",
+          "hours": 200.75
+        },
+        {
+          "activity": "Base Case Preparation (Fixed)",
+          "hours": 192.0
+        },
+        {
+          "activity": "Technical & Regulatory Connection Suppor",
+          "hours": 167.5
+        }
+      ],
+      "billing": [
+        {
+          "type": "Fixed Price Chargeable Hours",
+          "hours": 989.5,
+          "percentage": 47.2
+        },
+        {
+          "type": "Hourly Charge Rate",
+          "hours": 423.0,
+          "percentage": 20.2
+        },
+        {
+          "type": "Non-Chargeable Activity",
+          "hours": 683.25,
+          "percentage": 32.6
+        }
+      ]
+    },
+    {
+      "name": "Hayden Brunjes",
+      "position": "Power Systems Engineer ",
+      "totalHours": 1903.8,
+      "billableHours": 1445.25,
+      "utilization": 75.9,
+      "revenue": 362478.96,
+      "numProjects": 13,
+      "projects": [
+        {
+          "project": "GRD0500087",
+          "description": "Haughton BESS Grid Connection Studi",
+          "hours": 618.6,
+          "revenue": 163929.0
+        },
+        {
+          "project": "GRD0500090",
+          "description": "Gerogery Solar Farm & BESS Project",
+          "hours": 510.5,
+          "revenue": 135282.5
+        },
+        {
+          "project": "SL25-680AU",
+          "description": "Service Lines - FY25 - 680AU",
+          "hours": 243.5,
+          "revenue": 879.66
+        },
+        {
+          "project": "SL24-680AU",
+          "description": "Service Lines - FY24 - 680AU",
+          "hours": 205.85,
+          "revenue": 1001.3
+        },
+        {
+          "project": "GRD0500100",
+          "description": "Clements Gap BESS R1 Due Diligence",
+          "hours": 165.5,
+          "revenue": 28537.5
+        },
+        {
+          "project": "GRD0500104",
+          "description": "Markaranka BESS",
+          "hours": 63.75,
+          "revenue": 16893.75
+        },
+        {
+          "project": "GRD0500026",
+          "description": "Armidale BESS Connection Studies",
+          "hours": 22.75,
+          "revenue": 4003.5
+        },
+        {
+          "project": "GRD0500023",
+          "description": "Tamworth BESS Connection Studies",
+          "hours": 21.2,
+          "revenue": 0.0
+        },
+        {
+          "project": "GRD0500096",
+          "description": "Boulder Creek WF - R1 Registration",
+          "hours": 13.25,
+          "revenue": 3511.25
+        },
+        {
+          "project": "GRD0500066",
+          "description": "Blacktop-BESS OFFICER Project ",
+          "hours": 11.6,
+          "revenue": 1479.0
+        }
+      ],
+      "activities": [
+        {
+          "activity": "Base Case Preparation (Fixed)",
+          "hours": 523.15
+        },
+        {
+          "activity": "Static Studies (Fixed)",
+          "hours": 307.65
+        },
+        {
+          "activity": "Training",
+          "hours": 161.1
+        },
+        {
+          "activity": "PSS/E-PSCAD Benchmarking (Fixed) ",
+          "hours": 137.8
+        },
+        {
+          "activity": "Meetings",
+          "hours": 137.4
+        }
+      ],
+      "billing": [
+        {
+          "type": "Fixed Price Chargeable Hours",
+          "hours": 1171.55,
+          "percentage": 61.5
+        },
+        {
+          "type": "Hourly Charge Rate",
+          "hours": 197.5,
+          "percentage": 10.4
+        },
+        {
+          "type": "Non-Chargeable Activity",
+          "hours": 477.75,
+          "percentage": 25.1
+        },
+        {
+          "type": "Reimbursable Expenses",
+          "hours": 57.0,
+          "percentage": 3.0
+        }
+      ]
+    },
+    {
+      "name": "Dominic Joey Moncada",
+      "position": "Power Systems Engineer ",
+      "totalHours": 1901.0,
+      "billableHours": 944.9,
+      "utilization": 49.7,
+      "revenue": 240970.94,
+      "numProjects": 11,
+      "projects": [
+        {
+          "project": "GRD0500043",
+          "description": "Corop SF & BESS Connection Study",
+          "hours": 1051.1,
+          "revenue": 191377.5
+        },
+        {
+          "project": "SL25-680AU",
+          "description": "Service Lines - FY25 - 680AU",
+          "hours": 381.35,
+          "revenue": 0.0
+        },
+        {
+          "project": "SL24-680AU",
+          "description": "Service Lines - FY24 - 680AU",
+          "hours": 227.6,
+          "revenue": 38.44
+        },
+        {
+          "project": "GRD0500082",
+          "description": "Templers West BESS",
+          "hours": 113.95,
+          "revenue": 20723.0
+        },
+        {
+          "project": "GRD0500061",
+          "description": "Birdwood Energy Reserve",
+          "hours": 65.3,
+          "revenue": 15427.5
+        },
+        {
+          "project": "GRD0500078",
+          "description": "Upper Calliope Solar Farm",
+          "hours": 20.1,
+          "revenue": 5125.5
+        },
+        {
+          "project": "GRD0500026",
+          "description": "Armidale BESS Connection Studies",
+          "hours": 13.5,
+          "revenue": 892.5
+        },
+        {
+          "project": "GRD0500095",
+          "description": "DeLorean-Stanhope AD Plant PSS/E",
+          "hours": 12.0,
+          "revenue": 3180.0
+        },
+        {
+          "project": "GRD0500090",
+          "description": "Gerogery Solar Farm & BESS Project",
+          "hours": 7.1,
+          "revenue": 1881.5
+        },
+        {
+          "project": "GRD0500087",
+          "description": "Haughton BESS Grid Connection Studi",
+          "hours": 6.0,
+          "revenue": 1590.0
+        }
+      ],
+      "activities": [
+        {
+          "activity": "Training",
+          "hours": 400.8
+        },
+        {
+          "activity": "Updated Base Case Preparation (Fixed)",
+          "hours": 331.3
+        },
+        {
+          "activity": "Technical & Regulatory Connection Suppor",
+          "hours": 300.6
+        },
+        {
+          "activity": "Static Studies (Fixed)",
+          "hours": 216.4
+        },
+        {
+          "activity": "Studies Preparation and Data Collection,",
+          "hours": 185.2
+        }
+      ],
+      "billing": [
+        {
+          "type": "Fixed Price Chargeable Hours",
+          "hours": 752.0,
+          "percentage": 39.6
+        },
+        {
+          "type": "Hourly Charge Rate",
+          "hours": 188.9,
+          "percentage": 9.9
+        },
+        {
+          "type": "Non-Chargeable Activity",
+          "hours": 956.1,
+          "percentage": 50.3
+        },
+        {
+          "type": "Reimbursable Expenses",
+          "hours": 4.0,
+          "percentage": 0.2
+        }
+      ]
+    },
+    {
+      "name": "Komal Gaikwad",
+      "position": "Senior Power System Engineer",
+      "totalHours": 1381.4,
+      "billableHours": 988.85,
+      "utilization": 71.6,
+      "revenue": 296135.23,
+      "numProjects": 12,
+      "projects": [
+        {
+          "project": "GRD0500096",
+          "description": "Boulder Creek WF - R1 Registration",
+          "hours": 424.5,
+          "revenue": 124333.25
+        },
+        {
+          "project": "SL25-680AU",
+          "description": "Service Lines - FY25 - 680AU",
+          "hours": 334.9,
+          "revenue": 48.98
+        },
+        {
+          "project": "GRD0500079",
+          "description": "Sandy Creek Solar Farm & BESS",
+          "hours": 269.15,
+          "revenue": 74059.75
+        },
+        {
+          "project": "GRD0500089",
+          "description": "Yanco Delta Wind Farm-R0 Grid Study",
+          "hours": 135.7,
+          "revenue": 41388.5
+        },
+        {
+          "project": "GRD0500095",
+          "description": "DeLorean-Stanhope AD Plant PSS/E",
+          "hours": 79.05,
+          "revenue": 24110.25
+        },
+        {
+          "project": "GRD0500080",
+          "description": "Wellington North SF-Comm Support",
+          "hours": 62.5,
+          "revenue": 18437.5
+        },
+        {
+          "project": "GRD0500026",
+          "description": "Armidale BESS Connection Studies",
+          "hours": 33.7,
+          "revenue": 2832.0
+        },
+        {
+          "project": "GRD0500090",
+          "description": "Gerogery Solar Farm & BESS Project",
+          "hours": 15.6,
+          "revenue": 4758.0
+        },
+        {
+          "project": "GRD0500102",
+          "description": "Canowie BESS Due Diligence",
+          "hours": 14.2,
+          "revenue": 4047.0
+        },
+        {
+          "project": "GRD0500087",
+          "description": "Haughton BESS Grid Connection Studi",
+          "hours": 5.5,
+          "revenue": 1677.5
+        }
+      ],
+      "activities": [
+        {
+          "activity": "Technical & Regulatory Connection Suppor",
+          "hours": 206.7
+        },
+        {
+          "activity": "Management",
+          "hours": 175.3
+        },
+        {
+          "activity": "Model Acceptance Testing (Fixed)",
+          "hours": 101.05
+        },
+        {
+          "activity": "Model Resolution and Auxiliary Plant Con",
+          "hours": 85.7
+        },
+        {
+          "activity": "Meetings",
+          "hours": 80.1
+        }
+      ],
+      "billing": [
+        {
+          "type": "Fixed Price Chargeable Hours",
+          "hours": 536.35,
+          "percentage": 38.8
+        },
+        {
+          "type": "Hourly Charge Rate",
+          "hours": 446.0,
+          "percentage": 32.3
+        },
+        {
+          "type": "Non-Chargeable Activity",
+          "hours": 397.05,
+          "percentage": 28.7
+        },
+        {
+          "type": "Reimbursable Expenses",
+          "hours": 2.0,
+          "percentage": 0.1
+        }
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "project": "GRD0500061",
+      "description": "Birdwood Energy Reserve",
+      "totalHours": 3921.15,
+      "dailyHours": 560.16,
+      "totalRevenue": 887095.75,
+      "dailyRevenue": 126727.96
+    },
+    {
+      "project": "GRD0500043",
+      "description": "Corop SF & BESS Connection Study",
+      "totalHours": 3976.95,
+      "dailyHours": 568.14,
+      "totalRevenue": 726866.5,
+      "dailyRevenue": 103838.07
+    },
+    {
+      "project": "GRD0500090",
+      "description": "Gerogery Solar Farm & BESS Project",
+      "totalHours": 2499.9,
+      "dailyHours": 357.13,
+      "totalRevenue": 654324.5,
+      "dailyRevenue": 93474.93
+    },
+    {
+      "project": "GRD0500055",
+      "description": "Brinkworth BESS Connection Studies",
+      "totalHours": 2053.55,
+      "dailyHours": 293.36,
+      "totalRevenue": 543777.25,
+      "dailyRevenue": 77682.46
+    },
+    {
+      "project": "GRD0500082",
+      "description": "Templers West BESS",
+      "totalHours": 1934.59,
+      "dailyHours": 276.37,
+      "totalRevenue": 539216.2,
+      "dailyRevenue": 77030.89
+    },
+    {
+      "project": "GRD0500078",
+      "description": "Upper Calliope Solar Farm",
+      "totalHours": 1550.25,
+      "dailyHours": 221.46,
+      "totalRevenue": 458844.75,
+      "dailyRevenue": 65549.25
+    },
+    {
+      "project": "GRD0500089",
+      "description": "Yanco Delta Wind Farm-R0 Grid Study",
+      "totalHours": 1476.15,
+      "dailyHours": 210.88,
+      "totalRevenue": 433769.0,
+      "dailyRevenue": 61967.0
+    },
+    {
+      "project": "GRD0500022",
+      "description": "Tailem Bend 2 Hybrid Solar Farm",
+      "totalHours": 1870.33,
+      "dailyHours": 267.19,
+      "totalRevenue": 417071.73,
+      "dailyRevenue": 59581.68
+    },
+    {
+      "project": "GRD0500079",
+      "description": "Sandy Creek Solar Farm & BESS",
+      "totalHours": 1296.2,
+      "dailyHours": 185.17,
+      "totalRevenue": 361072.75,
+      "dailyRevenue": 51581.82
+    },
+    {
+      "project": "GRD0500096",
+      "description": "Boulder Creek WF - R1 Registration",
+      "totalHours": 1279.45,
+      "dailyHours": 182.78,
+      "totalRevenue": 348803.75,
+      "dailyRevenue": 49829.11
+    },
+    {
+      "project": "GRD0500068",
+      "description": "Wellington North Solar Farm",
+      "totalHours": 1058.1,
+      "dailyHours": 151.16,
+      "totalRevenue": 291194.25,
+      "dailyRevenue": 41599.18
+    },
+    {
+      "project": "GRD0500048",
+      "description": "Bookaar Solar Farm-R0 Studies & Con",
+      "totalHours": 1025.7,
+      "dailyHours": 146.53,
+      "totalRevenue": 278367.5,
+      "dailyRevenue": 39766.79
+    },
+    {
+      "project": "GRD0500087",
+      "description": "Haughton BESS Grid Connection Studi",
+      "totalHours": 986.3,
+      "dailyHours": 140.9,
+      "totalRevenue": 269149.0,
+      "dailyRevenue": 38449.86
+    },
+    {
+      "project": "GRD0500066",
+      "description": "Blacktop-BESS OFFICER Project ",
+      "totalHours": 1111.4,
+      "dailyHours": 158.77,
+      "totalRevenue": 253635.25,
+      "dailyRevenue": 36233.61
+    },
+    {
+      "project": "GRD0500080",
+      "description": "Wellington North SF-Comm Support",
+      "totalHours": 804.25,
+      "dailyHours": 114.89,
+      "totalRevenue": 227196.79,
+      "dailyRevenue": 32456.68
+    }
+  ],
+  "billing": [
+    {
+      "type": "Fixed Price Chargeable Hours",
+      "hours": 18316.67,
+      "percentage": 31.6
+    },
+    {
+      "type": "Hourly Charge Rate",
+      "hours": 16157.66,
+      "percentage": 27.9
+    },
+    {
+      "type": "Non-Chargeable Activity",
+      "hours": 22072.17,
+      "percentage": 38.1
+    },
+    {
+      "type": "Reimbursable Expenses",
+      "hours": 1349.0,
+      "percentage": 2.3
+    }
+  ],
+  "activities": [
+    {
+      "activity": "General Time",
+      "hours": 5629.41,
+      "revenue": 0.0
+    },
+    {
+      "activity": "Management",
+      "hours": 5053.01,
+      "revenue": 0.0
+    },
+    {
+      "activity": "Technical & Regulatory Connection Suppor",
+      "hours": 3475.5,
+      "revenue": 760697.5
+    },
+    {
+      "activity": "Technical & Regulatory Connection Suppor",
+      "hours": 3430.86,
+      "revenue": 904418.3
+    },
+    {
+      "activity": "Base Case Preparation (Fixed)",
+      "hours": 2445.1,
+      "revenue": 636821.5
+    },
+    {
+      "activity": "Dynamic Studies (Fixed)",
+      "hours": 1995.3,
+      "revenue": 548496.0
+    },
+    {
+      "activity": "Meetings",
+      "hours": 1903.35,
+      "revenue": 0.0
+    },
+    {
+      "activity": "Technical & Regulatory Connection Suppor",
+      "hours": 1462.85,
+      "revenue": 0.0
+    },
+    {
+      "activity": "Employee Expenses",
+      "hours": 1333.0,
+      "revenue": 275071.71
+    },
+    {
+      "activity": "Static Studies (Fixed)",
+      "hours": 1312.2,
+      "revenue": 343048.5
+    }
+  ],
+  "daily": []
+};
+
+        const Dashboard = () => {
+            const [activeTab, setActiveTab] = React.useState('overview');
+            const [data, setData] = React.useState(DASHBOARD_DATA);
+            const chartRef = React.useRef(null);
+
+            React.useEffect(() => {
+                if (!data || activeTab !== 'overview') return;
+
+                const ctx = document.getElementById('teamChart');
+                if (!ctx) return;
+
+                if (chartRef.current) {
+                    chartRef.current.destroy();
+                }
+
+                chartRef.current = new Chart(ctx.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: data.employees.map(e => {
+                            const parts = e.name.split(' ');
+                            return parts[0] + ' ' + parts[parts.length - 1];
+                        }),
+                        datasets: [{
+                            label: 'Total Hours',
+                            data: data.employees.map(e => e.totalHours),
+                            backgroundColor: 'rgba(54, 162, 235, 0.8)',
+                            borderWidth: 0
+                        }, {
+                            label: 'Billable Hours',
+                            data: data.employees.map(e => e.billableHours),
+                            backgroundColor: 'rgba(75, 192, 192, 0.8)',
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: true, position: 'top' }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { callback: (value) => `${value}h` }
+                            }
+                        }
+                    }
+                });
+
+                return () => {
+                    if (chartRef.current) {
+                        chartRef.current.destroy();
+                    }
+                };
+            }, [activeTab, data]);
+
+            const getUtilizationClass = (util) => {
+                if (util < 40) return 'low';
+                if (util < 70) return 'medium';
+                return '';
+            };
+
+            return (
+                <div className="dashboard">
+                    <div className="header">
+                        <h1>Team Burn Rate Dashboard - All 15 Members</h1>
+                        <p className="subtitle">{data.summary.dateRange} • {data.summary.numEmployees} Team Members • {data.summary.numProjects} Projects</p>
+                    </div>
+
+                    <div className="tabs">
+                        <button className={`tab-button ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>
+                            Overview
+                        </button>
+                        <button className={`tab-button ${activeTab === 'team' ? 'active' : ''}`} onClick={() => setActiveTab('team')}>
+                            Team Members
+                        </button>
+                        <button className={`tab-button ${activeTab === 'projects' ? 'active' : ''}`} onClick={() => setActiveTab('projects')}>
+                            Projects
+                        </button>
+                        <button className={`tab-button ${activeTab === 'table' ? 'active' : ''}`} onClick={() => setActiveTab('table')}>
+                            Detailed Table
+                        </button>
+                    </div>
+
+                    {activeTab === 'overview' && (
+                        <>
+                            <div className="metrics-grid">
+                                <div className="metric-card">
+                                    <div className="label">Total Hours</div>
+                                    <div className="value">{data.summary.totalHours.toLocaleString()}</div>
+                                    <div className="subvalue">{data.summary.avgDailyHours.toFixed(0)} hrs/day avg</div>
+                                </div>
+                                <div className="metric-card">
+                                    <div className="label">Billable Hours</div>
+                                    <div className="value">{data.summary.billableHours.toLocaleString()}</div>
+                                    <div className="subvalue">{data.summary.utilization.toFixed(1)}% team utilization</div>
+                                </div>
+                                <div className="metric-card">
+                                    <div className="label">Total Revenue</div>
+                                    <div className="value">${(data.summary.totalRevenue / 1000000).toFixed(2)}M</div>
+                                    <div className="subvalue">${(data.summary.totalRevenue / data.summary.billableHours).toFixed(0)}/hr avg</div>
+                                </div>
+                                <div className="metric-card">
+                                    <div className="label">Active Projects</div>
+                                    <div className="value">{data.summary.numProjects}</div>
+                                    <div className="subvalue">{data.summary.numEmployees} team members</div>
+                                </div>
+                            </div>
+
+                            <div className="chart-card">
+                                <h2>Team Hours Comparison</h2>
+                                <div style={{height: '400px'}}>
+                                    <canvas id="teamChart"></canvas>
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {activeTab === 'team' && (
+                        <div className="employee-grid">
+                            {data.employees.map((emp, idx) => (
+                                <div key={idx} className="employee-card">
+                                    <div className="name">{emp.name}</div>
+                                    <div className="position">{emp.position}</div>
+                                    <div className="stat">
+                                        <span className="label">Total Hours</span>
+                                        <span className="value">{emp.totalHours.toLocaleString()}h</span>
+                                    </div>
+                                    <div className="stat">
+                                        <span className="label">Billable Hours</span>
+                                        <span className="value">{emp.billableHours.toLocaleString()}h</span>
+                                    </div>
+                                    <div className="stat">
+                                        <span className="label">Utilization</span>
+                                        <span className="value">{emp.utilization}%</span>
+                                    </div>
+                                    <div className="utilization-bar">
+                                        <div className={`utilization-fill ${getUtilizationClass(emp.utilization)}`} style={{width: `${emp.utilization}%`}}></div>
+                                    </div>
+                                    <div className="stat">
+                                        <span className="label">Revenue</span>
+                                        <span className="value">${(emp.revenue / 1000).toFixed(0)}k</span>
+                                    </div>
+                                    <div className="stat">
+                                        <span className="label">Projects</span>
+                                        <span className="value">{emp.numProjects}</span>
+                                    </div>
+                                    {emp.projects.length > 0 && (
+                                        <div className="project-list">
+                                            <strong>Top Projects:</strong>
+                                            {emp.projects.slice(0, 3).map((proj, pidx) => (
+                                                <div key={pidx} className="project-item">
+                                                    • {proj.project}: {proj.hours}h
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {activeTab === 'projects' && (
+                        <div className="table-container">
+                            <h2 style={{marginBottom: '20px'}}>Top Projects by Revenue</h2>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Project Code</th>
+                                        <th>Description</th>
+                                        <th>Total Hours</th>
+                                        <th>Daily Hours</th>
+                                        <th>Total Revenue</th>
+                                        <th>Daily Revenue</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {data.projects.map((project, idx) => (
+                                        <tr key={idx}>
+                                            <td><strong>{project.project}</strong></td>
+                                            <td>{project.description}</td>
+                                            <td>{project.totalHours.toFixed(1)}h</td>
+                                            <td>{project.dailyHours.toFixed(1)}h/day</td>
+                                            <td>${project.totalRevenue.toLocaleString()}</td>
+                                            <td><strong>${project.dailyRevenue.toLocaleString()}/day</strong></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+
+                    {activeTab === 'table' && (
+                        <div className="table-container">
+                            <h2 style={{marginBottom: '20px'}}>Detailed Team Member Breakdown</h2>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Position</th>
+                                        <th>Total Hours</th>
+                                        <th>Billable Hours</th>
+                                        <th>Utilization</th>
+                                        <th>Revenue</th>
+                                        <th>Projects</th>
+                                        <th>Top 3 Projects</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {data.employees.map((emp, idx) => (
+                                        <tr key={idx}>
+                                            <td><strong>{emp.name}</strong></td>
+                                            <td>{emp.position}</td>
+                                            <td>{emp.totalHours.toLocaleString()}h</td>
+                                            <td>{emp.billableHours.toLocaleString()}h</td>
+                                            <td>
+                                                <span style={{
+                                                    padding: '4px 8px',
+                                                    borderRadius: '4px',
+                                                    background: emp.utilization >= 70 ? '#c6f6d5' : emp.utilization >= 40 ? '#feebc8' : '#fed7d7',
+                                                    color: emp.utilization >= 70 ? '#22543d' : emp.utilization >= 40 ? '#c05621' : '#c53030',
+                                                    fontWeight: '600'
+                                                }}>
+                                                    {emp.utilization}%
+                                                </span>
+                                            </td>
+                                            <td>${(emp.revenue / 1000).toFixed(0)}k</td>
+                                            <td>{emp.numProjects}</td>
+                                            <td style={{fontSize: '12px'}}>
+                                                {emp.projects.slice(0, 3).map((proj, pidx) => (
+                                                    <div key={pidx}>• {proj.project} ({proj.hours}h)</div>
+                                                ))}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        ReactDOM.render(<Dashboard />, document.getElementById('root'));
+    </script>
+</body>
+</html>

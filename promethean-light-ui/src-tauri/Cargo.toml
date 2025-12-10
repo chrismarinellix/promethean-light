@@ -1,0 +1,28 @@
+[package]
+name = "promethean-light-ui"
+version = "1.0.0"
+description = "Promethean Light God Mode Panel"
+authors = ["you"]
+edition = "2021"
+
+[lib]
+name = "promethean_light_ui_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", features = ["json"] }
+tokio = { version = "1", features = ["full"] }
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "z"
+strip = true

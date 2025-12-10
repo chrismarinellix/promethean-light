@@ -50,14 +50,14 @@ class OutlookWatcher:
 
             if self.watch_sent:
                 self._sent_items = mapi.GetDefaultFolder(5)  # 5 = Sent Items
-                print(f"✓ Connected to Outlook inbox + sent items")
+                print(f"[OK] Connected to Outlook inbox + sent items")
             else:
-                print(f"✓ Connected to Outlook inbox")
+                print(f"[OK] Connected to Outlook inbox")
 
             print(f"  Loading last {self.history_hours} hours of emails...")
             return True
         except Exception as e:
-            print(f"✗ Failed to connect to Outlook: {e}")
+            print(f"[ERROR] Failed to connect to Outlook: {e}")
             return False
 
     def start(self) -> None:
@@ -66,7 +66,7 @@ class OutlookWatcher:
             return
 
         self._running = True
-        print(f"👁 Watching Outlook inbox")
+        print(f"[WATCH] Watching Outlook inbox")
 
         while self._running:
             try:
@@ -79,7 +79,7 @@ class OutlookWatcher:
     def stop(self) -> None:
         """Stop watching"""
         self._running = False
-        print(f"✓ Outlook watcher stopped")
+        print(f"[OK] Outlook watcher stopped")
 
     def _check_new_emails(self) -> None:
         """Check for new emails in inbox and sent items"""
@@ -101,14 +101,14 @@ class OutlookWatcher:
             new_count += sent_count
 
         if new_count > 0:
-            print(f"📧 [{check_time}] Processed {new_count} new email(s) from Outlook")
+            print(f"[EMAIL] [{check_time}] Processed {new_count} new email(s) from Outlook")
             if inbox_count > 0:
-                print(f"   • Inbox: {inbox_count} new")
+                print(f"   - Inbox: {inbox_count} new")
             if sent_count > 0:
-                print(f"   • Sent: {sent_count} new")
+                print(f"   - Sent: {sent_count} new")
             if self._last_processed_time:
-                print(f"   • Last sync: {self._last_processed_time.strftime('%Y-%m-%d %H:%M:%S')}")
-            print(f"   • Total tracked: {len(self._seen_ids)} emails")
+                print(f"   - Last sync: {self._last_processed_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"   - Total tracked: {len(self._seen_ids)} emails")
             # Save state after processing new emails
             self._save_state()
 

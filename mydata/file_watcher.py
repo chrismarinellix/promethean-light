@@ -1,10 +1,20 @@
 """File system watcher for automatic ingestion"""
 
 import time
+from datetime import datetime, date
 from pathlib import Path
-from typing import Callable, List, Union
+from typing import Callable, List, Optional, Set, Union
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileSystemEvent
+
+
+# Supported file extensions for ingestion
+SUPPORTED_EXTENSIONS = {
+    '.txt', '.md', '.csv', '.json', '.log',  # Plain text
+    '.pdf',  # PDF
+    '.docx',  # Word
+    '.xlsx', '.xls',  # Excel
+}
 
 
 class FileWatcher:
@@ -22,19 +32,89 @@ class FileWatcher:
         # Create handler
         self.handler = FileCreatedHandler(self.on_file_created)
 
-    def start(self) -> None:
-        """Start watching directories"""
+    def start(self, scan_today: bool = True) -> None:
+        """Start watching directories
+
+        Args:
+            scan_today: If True, scan for files created/modified today and ingest them
+        """
         for watch_dir in self.watch_dirs:
             if not watch_dir.exists():
-                print(f"⚠ Watch directory does not exist: {watch_dir}")
+                print(f"[WARN] Watch directory does not exist: {watch_dir}")
                 continue
 
             self.observer.schedule(self.handler, str(watch_dir), recursive=self.recursive)
-            print(f"👁 Watching: {watch_dir}")
+            print(f"[WATCH] Watching: {watch_dir}")
 
         self.observer.start()
         self._running = True
-        print("✓ File watcher started")
+        print("[OK] File watcher started")
+
+        # Scan for today's files on startup
+        if scan_today:
+            self._ingest_todays_files()
+
+    def _ingest_todays_files(self) -> None:
+        """Scan watched directories for files created/modified today and ingest them.
+
+        This runs once on startup to catch any files that were added before
+        the watcher started. Already-ingested files are skipped via file_hash
+        deduplication in the ingestion layer.
+        """
+        today = date.today()
+        files_found = 0
+        files_queued = 0
+
+        print(f"[SCAN] Scanning for today's files ({today.strftime('%Y-%m-%d')})...")
+
+        for watch_dir in self.watch_dirs:
+            if not watch_dir.exists():
+                continue
+
+            # Scan directory (recursively if configured)
+            pattern = "**/*" if self.recursive else "*"
+            for file_path in watch_dir.glob(pattern):
+                # Skip directories
+                if file_path.is_dir():
+                    continue
+
+                # Skip unsupported extensions
+                if file_path.suffix.lower() not in SUPPORTED_EXTENSIONS:
+                    continue
+
+                # Skip hidden/temp files
+                if file_path.name.startswith(".") or file_path.name.startswith("~"):
+                    continue
+
+                # Check if file was created/modified today
+                try:
+                    mtime = datetime.fromtimestamp(file_path.stat().st_mtime).date()
+                    if mtime == today:
+                        files_found += 1
+
+                        # Skip if already processed this session
+                        if str(file_path) in self.handler.processed_files:
+                            continue
+
+                        # Mark as processed
+                        self.handler.processed_files.add(str(file_path))
+                        files_queued += 1
+
+                        # Trigger ingestion
+                        try:
+                            print(f"[SCAN] Found today's file: {file_path.name}")
+                            self.on_file_created(file_path)
+                        except Exception as e:
+                            print(f"[SCAN] Error ingesting {file_path.name}: {e}")
+
+                except Exception:
+                    # Skip files we can't stat
+                    continue
+
+        if files_found > 0:
+            print(f"[SCAN] Complete: {files_queued} new files queued for ingestion (of {files_found} found today)")
+        else:
+            print(f"[SCAN] No new files from today found in watched directories")
 
     def stop(self) -> None:
         """Stop watching"""
@@ -42,7 +122,7 @@ class FileWatcher:
             self.observer.stop()
             self.observer.join()
             self._running = False
-            print("✓ File watcher stopped")
+            print("[OK] File watcher stopped")
 
     def is_running(self) -> bool:
         """Check if watcher is running"""
@@ -78,7 +158,7 @@ class FileCreatedHandler(FileSystemEventHandler):
         if not file_path.exists():
             return
 
-        print(f"📄 New file detected: {file_path.name}")
+        print(f"[FILE] New file detected: {file_path.name}")
         self.processed_files.add(str(file_path))
 
         try:
