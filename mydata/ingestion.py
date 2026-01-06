@@ -120,11 +120,16 @@ class IngestionPipeline:
         timestamp = datetime.now().strftime("%H:%M:%S")
         text = email_data["full_text"]
         source = f"email://{email_data.get('sender', 'unknown')}/{email_data.get('uid', 'unknown')}"
+        subject = email_data.get("subject", "(no subject)")[:50]
+
+        print(f"[EMAIL-DEBUG] [{timestamp}] Processing: '{subject}'")
+        print(f"[EMAIL-DEBUG]   - Sender: {email_data.get('sender', 'unknown')[:40]}")
+        print(f"[EMAIL-DEBUG]   - Text length: {len(text)} chars")
 
         # Check for semantic duplicates (emails can be forwarded/duplicated)
         if self._is_semantic_duplicate(text, threshold=0.98):
-            subject = email_data.get("subject", "(no subject)")[:40]
-            print(f"[!] [{timestamp}] Duplicate email skipped: {subject}...")
+            print(f"[!] [{timestamp}] Duplicate email SKIPPED: {subject}...")
+            print(f"[EMAIL-DEBUG]   - Reason: 98% semantic match with existing content")
             return None
 
         # Create document

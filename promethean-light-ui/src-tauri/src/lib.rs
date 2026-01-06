@@ -36,6 +36,8 @@ pub struct DaemonStats {
     pub total_clusters: i64,
     #[serde(default)]
     pub sources: Option<SourceCounts>,
+    #[serde(default)]
+    pub last_email_at: Option<String>,
 }
 
 #[tauri::command]
@@ -121,10 +123,14 @@ async fn get_tags() -> Result<Vec<serde_json::Value>, String> {
 #[tauri::command]
 async fn start_daemon(passphrase: String) -> Result<String, String> {
     // Set environment variable and start daemon in a visible console window
-    // Note: The window title must be quoted when it contains spaces
-    let result = Command::new("cmd")
-        .args(["/C", "start", "\"Promethean Light Daemon\"", "cmd", "/K",
-               &format!("cd /d \"C:\\Code\\Promethian  Light\" && set MYDATA_PASSPHRASE={} && python -m mydata daemon", passphrase)])
+    // Use PowerShell to avoid cmd.exe quoting issues with double-space paths
+    let ps_command = format!(
+        "$env:MYDATA_PASSPHRASE='{}'; Set-Location 'C:\\Code\\Promethian  Light'; python -m mydata daemon",
+        passphrase
+    );
+
+    let result = Command::new("powershell")
+        .args(["-NoExit", "-Command", &ps_command])
         .spawn();
 
     match result {

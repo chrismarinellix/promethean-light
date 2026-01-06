@@ -13,7 +13,14 @@ export const isSearching = writable(false);
 export const stats = writable({
   total_documents: 0,
   total_chunks: 0,
-  total_tags: 0
+  total_tags: 0,
+  total_clusters: 0,
+  sources: {
+    emails: 0,
+    documents: 0,
+    notes: 0
+  },
+  last_email_at: null
 });
 
 // Favorites (saved searches)
@@ -31,6 +38,145 @@ export const activeSection = writable('chat');
 // Chat state
 export const chatMessages = writable([]);
 export const chatInput = writable('');
+
+// Chat sessions (for history dropdown)
+export const chatSessions = writable([]);
+export const currentSessionId = writable(null);
+
+// Save current chat as a session
+export function saveCurrentSession() {
+  let messages = [];
+  let sessionId = null;
+
+  chatMessages.subscribe(m => messages = m)();
+  currentSessionId.subscribe(id => sessionId = id)();
+
+  if (messages.length === 0) return;
+
+  // Get first user message as title
+  const firstUserMsg = messages.find(m => m.role === 'user');
+  const title = firstUserMsg ? firstUserMsg.content.substring(0, 50) + (firstUserMsg.content.length > 50 ? '...' : '') : 'Untitled';
+
+  chatSessions.update(sessions => {
+    // If we have a current session, update it
+    if (sessionId) {
+      const updated = sessions.map(s =>
+        s.id === sessionId ? { ...s, messages, title, updatedAt: new Date().toISOString() } : s
+      );
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('promethean-chat-sessions', JSON.stringify(updated));
+      }
+      return updated;
+    }
+
+    // Create new session
+    const newSession = {
+      id: Date.now(),
+      title,
+      messages,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    currentSessionId.set(newSession.id);
+    const updated = [newSession, ...sessions].slice(0, 20); // Max 20 sessions
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('promethean-chat-sessions', JSON.stringify(updated));
+    }
+    return updated;
+  });
+}
+
+// Load a session
+export function loadSession(sessionId) {
+  let sessions = [];
+  chatSessions.subscribe(s => sessions = s)();
+
+  const session = sessions.find(s => s.id === sessionId);
+  if (session) {
+    chatMessages.set(session.messages);
+    currentSessionId.set(sessionId);
+  }
+}
+
+// Start new session
+export function startNewSession() {
+  // Save current first if has messages
+  let messages = [];
+  chatMessages.subscribe(m => messages = m)();
+  if (messages.length > 0) {
+    saveCurrentSession();
+  }
+
+  chatMessages.set([]);
+  currentSessionId.set(null);
+}
+
+// Delete a session
+export function deleteSession(sessionId) {
+  chatSessions.update(sessions => {
+    const updated = sessions.filter(s => s.id !== sessionId);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('promethean-chat-sessions', JSON.stringify(updated));
+    }
+    return updated;
+  });
+}
+
+// Load sessions from localStorage
+export function loadChatSessions() {
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('promethean-chat-sessions');
+    if (saved) {
+      try {
+        chatSessions.set(JSON.parse(saved));
+      } catch (e) {
+        console.error('Failed to load chat sessions:', e);
+      }
+    }
+  }
+}
+
+// Recent searches (for quick access lozenges on welcome screen)
+export const recentSearches = writable([]);
+const MAX_RECENT_SEARCHES = 15;
+
+export function addRecentSearch(query) {
+  if (!query || query.trim().length < 3) return;
+
+  const trimmed = query.trim();
+
+  recentSearches.update(searches => {
+    // Remove if already exists (to move to front)
+    const filtered = searches.filter(s => s.toLowerCase() !== trimmed.toLowerCase());
+    // Add to front
+    const updated = [trimmed, ...filtered].slice(0, MAX_RECENT_SEARCHES);
+    // Persist to localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('promethean-recent-searches', JSON.stringify(updated));
+    }
+    return updated;
+  });
+}
+
+export function loadRecentSearches() {
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('promethean-recent-searches');
+    if (saved) {
+      try {
+        recentSearches.set(JSON.parse(saved));
+      } catch (e) {
+        console.error('Failed to load recent searches:', e);
+      }
+    }
+  }
+}
+
+export function clearRecentSearches() {
+  recentSearches.set([]);
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('promethean-recent-searches');
+  }
+}
 
 // Database info
 export const databaseInfo = writable({

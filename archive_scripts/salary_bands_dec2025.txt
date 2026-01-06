@@ -1,0 +1,26 @@
+SALARY BANDS BY LEVEL (Dec 2025)
+
+AUSTRALIA (AUD):
+- Director / Global Head: $250,000 - $260,000
+- Principal Engineer: $230,000
+- Team Lead: $230,000
+- Lead Engineer: $170,000 - $220,000
+- Senior Engineer: $160,000 - $175,000
+- Power Systems Engineer (Mid): $130,000 - $140,000
+- Power Systems Engineer (Junior): $95,000 - $108,000 (proposed)
+- Administrator: $49,000
+
+INDIA (INR / AUD):
+- Principal P.S Engineer: INR 50L+ ($88K+ AUD)
+- Lead P.S Engineer: INR 40L - 50L ($70K - $88K AUD)
+- Senior P.S Engineer: INR 25L - 40L ($44K - $70K AUD)
+- Mid-Senior Engineer: INR 25L ($44K AUD) - Band minimum
+- P.S Engineer (Junior): INR 10L - 25L ($18K - $44K AUD)
+
+MALAYSIA (MYR / AUD):
+- Engineer: MYR 156,000 ($52K AUD)
+
+KEY NOTES:
+- Hayden at $95K is significantly below mid-level peers ($130K-$140K)
+- India Seniors Faraz and Mohammed paid above band
+- India Mid-Seniors (Owais, Chirag, Chandan) all at band minimum INR 25L

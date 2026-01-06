@@ -141,7 +141,7 @@ def get_australia_staff_summary() -> Dict:
             {"id": "470443", "name": "Komal Gaikwad", "position": "Senior Engineer", "salary": "$160,000"},
             {"id": "470433", "name": "Dominic Moncada", "position": "Power Systems Engineer", "salary": "$140,000"},
             {"id": "470428", "name": "Khadija Kobra", "position": "Power Systems Engineer", "salary": "$130,000"},
-            {"id": "470434", "name": "Hayden Brunjes", "position": "Power Systems Engineer", "salary": "$95,000"},
+            {"id": "470434", "name": "Hayden Brunjes", "position": "Power Systems Engineer", "salary": "$115,000"},
             {"id": "470116", "name": "Parthena Savvidis", "position": "Administrator", "salary": "$49,000"}
         ],
         "total_count": 13,

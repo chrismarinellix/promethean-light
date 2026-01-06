@@ -149,7 +149,8 @@ class Daemon:
                 self.pipeline,
                 self.hybrid_searcher,
                 self.anonymizer,
-                self._api_startup_event  # Pass the startup event
+                self._api_startup_event,  # Pass the startup event
+                self.email_watchers  # Pass email watchers for sync
             )
 
             uvicorn.run(app, host=self.settings.api_host, port=self.settings.api_port, log_level="error")

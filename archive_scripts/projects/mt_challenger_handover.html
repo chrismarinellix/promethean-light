@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mt Challenger Project - Executive Handover | Vysus Group</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Roboto', 'Arial', sans-serif;
+            background: #f4f4f4;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: #1a1a1a;
+            color: white;
+            padding: 40px;
+            position: relative;
+            overflow: hidden;
+            border-bottom: 4px solid #00a651;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+        }
+
+        .header-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header .subtitle {
+            font-size: 1.2em;
+            opacity: 0.9;
+            margin-bottom: 20px;
+        }
+
+        .header .meta {
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .meta-icon {
+            background: rgba(255,255,255,0.2);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+
+        .status-banner {
+            background: #ff6b6b;
+            color: white;
+            padding: 15px 40px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+
+        .status-banner.urgent {
+            background: #00a651;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.85; }
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+            margin-bottom: 40px;
+        }
+
+        .card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 25px;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            border-color: #00a651;
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .card-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5em;
+        }
+
+        .icon-blue { background: #00a651; }
+        .icon-green { background: #00a651; }
+        .icon-orange { background: #f7941d; }
+        .icon-red { background: #e31837; }
+        .icon-purple { background: #1a1a1a; }
+
+        .card-title {
+            font-size: 1.3em;
+            font-weight: 700;
+            color: #2d3436;
+        }
+
+        .card-content {
+            color: #636e72;
+            line-height: 1.6;
+        }
+
+        .timeline {
+            position: relative;
+            padding: 30px 0;
+        }
+
+        .timeline-item {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+            position: relative;
+        }
+
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: 23px;
+            top: 40px;
+            bottom: -30px;
+            width: 2px;
+            background: #e0e0e0;
+        }
+
+        .timeline-item:last-child::before {
+            display: none;
+        }
+
+        .timeline-dot {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2em;
+            flex-shrink: 0;
+            z-index: 1;
+        }
+
+        .timeline-content {
+            flex: 1;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 4px solid #00a651;
+        }
+
+        .timeline-date {
+            font-weight: 700;
+            color: #00a651;
+            margin-bottom: 8px;
+        }
+
+        .timeline-title {
+            font-size: 1.1em;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #2d3436;
+        }
+
+        .timeline-desc {
+            color: #636e72;
+            line-height: 1.5;
+        }
+
+        .status-completed { background: #00b894; color: white; }
+        .status-pending { background: #fdcb6e; color: white; }
+        .status-critical { background: #d63031; color: white; }
+        .status-inprogress { background: #0984e3; color: white; }
+
+        .issue-list {
+            list-style: none;
+        }
+
+        .issue-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid;
+        }
+
+        .issue-critical { border-left-color: #d63031; }
+        .issue-warning { border-left-color: #fdcb6e; }
+        .issue-info { border-left-color: #0984e3; }
+
+        .issue-icon {
+            font-size: 1.5em;
+        }
+
+        .issue-content h4 {
+            margin-bottom: 5px;
+            color: #2d3436;
+        }
+
+        .issue-content p {
+            color: #636e72;
+            font-size: 0.95em;
+            line-height: 1.5;
+        }
+
+        .team-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .team-member {
+            text-align: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .team-member:hover {
+            background: #00a651;
+            color: white;
+            transform: scale(1.05);
+        }
+
+        .team-avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            margin: 0 auto 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2em;
+            font-weight: 700;
+            color: white;
+        }
+
+        .avatar-blue { background: #00a651; }
+        .avatar-green { background: #00a651; }
+        .avatar-orange { background: #f7941d; }
+        .avatar-purple { background: #1a1a1a; }
+
+        .team-name {
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .team-role {
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+
+        .action-list {
+            list-style: none;
+        }
+
+        .action-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            margin-bottom: 10px;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .action-item:hover {
+            border-color: #00a651;
+            transform: translateX(5px);
+        }
+
+        .action-checkbox {
+            width: 24px;
+            height: 24px;
+            border: 2px solid #00a651;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .action-checkbox.checked {
+            background: #00a651;
+            border-color: #00a651;
+        }
+
+        .action-text {
+            flex: 1;
+            color: #2d3436;
+        }
+
+        .action-priority {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .priority-critical {
+            background: #d63031;
+            color: white;
+        }
+
+        .priority-high {
+            background: #fdcb6e;
+            color: #2d3436;
+        }
+
+        .priority-medium {
+            background: #0984e3;
+            color: white;
+        }
+
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: #1a1a1a;
+            color: white;
+            padding: 25px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .stat-card.green {
+            background: #00a651;
+        }
+
+        .stat-card.orange {
+            background: #f7941d;
+        }
+
+        .stat-card.red {
+            background: #e31837;
+        }
+
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            opacity: 0.9;
+            font-size: 0.95em;
+        }
+
+        .cta-section {
+            background: #1a1a1a;
+            color: white;
+            padding: 40px;
+            border-radius: 12px;
+            text-align: center;
+            margin-top: 40px;
+            border-top: 4px solid #00a651;
+        }
+
+        .cta-title {
+            font-size: 2em;
+            margin-bottom: 15px;
+            font-weight: 700;
+        }
+
+        .cta-text {
+            font-size: 1.1em;
+            margin-bottom: 25px;
+            opacity: 0.95;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 15px 35px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #00a651;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: white;
+            border: 2px solid white;
+        }
+
+        .btn-secondary:hover {
+            background: white;
+            color: #00a651;
+        }
+
+        .section {
+            margin-bottom: 50px;
+        }
+
+        .section-title {
+            font-size: 2em;
+            margin-bottom: 25px;
+            color: #2d3436;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 5px;
+            height: 40px;
+            background: #00a651;
+            border-radius: 3px;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .cta-buttons {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+            }
+        }
+
+        .health-score {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-weight: 700;
+            margin-top: 10px;
+        }
+
+        .score-value {
+            font-size: 1.5em;
+            color: #fdcb6e;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #00a651;
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+
+        .vysus-branding {
+            position: absolute;
+            top: 20px;
+            right: 40px;
+            font-size: 0.9em;
+            opacity: 0.9;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .vysus-logo-text {
+            font-weight: 700;
+            font-size: 1.4em;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        function MtChallengerDashboard() {
+            const [activeTab, setActiveTab] = useState('overview');
+
+            const projectData = {
+                name: "Mt Challenger Wind Farm + BESS",
+                code: "Q7193",
+                client: "Alinta Energy",
+                contact: "Cedric Banda",
+                type: "Powerlink Queensland Connection Studies",
+                location: "Queensland, Australia",
+                network: "Powerlink Queensland (PLQ)",
+                voltage: "66kV",
+                projectType: "Wind Farm + Battery Energy Storage System",
+                technicalStudies: "PowerFactory Modeling, Harmonics Analysis, Network Loading (66kV)",
+                healthScore: 6.5,
+                targetSignDate: "Nov 29, 2025",
+                kickoffDate: "Dec 2, 2025",
+                phase1Completion: "Dec 20, 2025",
+                phase2Start: "Late Jan / Early Feb 2026",
+                clientTimeline: "Capacity assessment before Christmas, Connection Application late Jan/early Feb"
+            };
+
+            const timeline = [
+                {
+                    date: "Oct 10, 2025",
+                    title: "Proposal Submitted",
+                    desc: "PLQ methodology rewrite completed by Tony Morton. Proposal restructured to three-stage approach.",
+                    status: "completed",
+                    icon: "✓"
+                },
+                {
+                    date: "Oct 13, 2025",
+                    title: "Project Approved",
+                    desc: "Thomas approved Mt Challenger project to proceed. Technical scope confirmed.",
+                    status: "completed",
+                    icon: "✓"
+                },
+                {
+                    date: "Nov 6, 2025",
+                    title: "Contract Review Complete",
+                    desc: "Vysus legal: 'Reasonable contract, nothing too onerous.' Redlines sent to client.",
+                    status: "completed",
+                    icon: "✓"
+                },
+                {
+                    date: "Nov 18, 2025",
+                    title: "Insurance Issue Raised",
+                    desc: "Client legal flagged $3M vs $20M insurance gap. Critical blocker identified.",
+                    status: "critical",
+                    icon: "!"
+                },
+                {
+                    date: "Nov 24, 2025 (TODAY)",
+                    title: "Handover Meeting",
+                    desc: "Team transition from Robby to Chris/Tony. Insurance resolution required.",
+                    status: "inprogress",
+                    icon: "▶"
+                },
+                {
+                    date: "Nov 29, 2025",
+                    title: "Target Contract Signature",
+                    desc: "Deadline to finalize all terms and sign MCA to enable December start.",
+                    status: "pending",
+                    icon: "◷"
+                },
+                {
+                    date: "Dec 2-6, 2025",
+                    title: "Project Kickoff",
+                    desc: "Begin capacity assessment work. First technical coordination with client team.",
+                    status: "pending",
+                    icon: "◷"
+                }
+            ];
+
+            const issues = [
+                {
+                    priority: "critical",
+                    title: "Public Liability Insurance Gap",
+                    desc: "Vysus: $3M | Client needs: $20M (6.7x gap). 6 days pending response. MUST RESOLVE TODAY.",
+                    icon: "🚨"
+                },
+                {
+                    priority: "critical",
+                    title: "Team Handover Confidence",
+                    desc: "Position transition as upgrade: Dedicated specialists vs one generalist. Show continuity.",
+                    icon: "👥"
+                },
+                {
+                    priority: "warning",
+                    title: "Client Legal Review In Progress",
+                    desc: "Insurance was 'one key comment' - more feedback may be coming. Need full review timeline.",
+                    icon: "⚠️"
+                },
+                {
+                    priority: "warning",
+                    title: "Management Approval Timeline Unknown",
+                    desc: "Alinta management approval required. No timeline provided. Get clarity today.",
+                    icon: "⏰"
+                },
+                {
+                    priority: "info",
+                    title: "66kV Network Loading Risk",
+                    desc: "PLQ shows significant loading. May expand scope. PowerFactory model available.",
+                    icon: "⚡"
+                }
+            ];
+
+            const team = [
+                { name: "Chris Marinelli", role: "Commercial Lead", avatar: "CM", color: "blue", status: "NEW" },
+                { name: "Tony Morton", role: "Technical Lead", avatar: "TM", color: "green", status: "CONTINUITY" },
+                { name: "Naveen Rajagopal", role: "Technical Support", avatar: "NR", color: "purple", status: "CONTINUITY" },
+                { name: "Graham", role: "Contracts/Legal", avatar: "G", color: "orange", status: "SUPPORT" },
+                { name: "Robby Palackal", role: "Transitioning", avatar: "RP", color: "orange", status: "DEPARTING" }
+            ];
+
+            const actions = [
+                { text: "Internal huddle: Decide insurance position ($3M/$10M/$20M)", priority: "critical", done: false },
+                { text: "Get insurance quotes for $10M, $15M, $20M coverage", priority: "critical", done: false },
+                { text: "Prepare RACI chart showing post-Robby team structure", priority: "critical", done: false },
+                { text: "Present insurance solution to Cedric (not problem)", priority: "critical", done: false },
+                { text: "Get Alinta legal review completion timeline from Cedric", priority: "critical", done: false },
+                { text: "Get Alinta management approval timeline from Cedric", priority: "critical", done: false },
+                { text: "Send insurance position in writing (within 2 hours post-meeting)", priority: "high", done: false },
+                { text: "Send meeting notes with clear action items", priority: "high", done: false },
+                { text: "Schedule follow-up meeting for Nov 27-28", priority: "high", done: false },
+                { text: "Lock contract signature by Nov 29", priority: "critical", done: false }
+            ];
+
+            return (
+                <div className="container">
+                    <div className="header">
+                        <div className="vysus-branding">
+                            <span className="vysus-logo-text">VYSUS</span>
+                            <span>GROUP</span>
+                        </div>
+                        <div className="header-content">
+                            <h1>{projectData.name}</h1>
+                            <div className="subtitle">{projectData.type}</div>
+                            <div className="meta">
+                                <div className="meta-item">
+                                    <span className="meta-icon">📋 {projectData.code}</span>
+                                </div>
+                                <div className="meta-item">
+                                    <span className="meta-icon">🏢 {projectData.client}</span>
+                                </div>
+                                <div className="meta-item">
+                                    <span className="meta-icon">👤 {projectData.contact}</span>
+                                </div>
+                                <div className="meta-item">
+                                    <span className="meta-icon">📍 {projectData.location}</span>
+                                </div>
+                                <div className="meta-item">
+                                    <span className="meta-icon">⚡ {projectData.voltage} Network</span>
+                                </div>
+                                <div className="meta-item">
+                                    <span className="meta-icon">🔌 {projectData.network}</span>
+                                </div>
+                            </div>
+                            <div className="health-score">
+                                <span>Deal Health:</span>
+                                <span className="score-value">{projectData.healthScore}/10</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="status-banner urgent">
+                        🚨 CRITICAL: Handover Meeting TODAY | Insurance Decision Required | 5 Days to Contract Signature
+                    </div>
+
+                    <div className="content">
+                        {/* Key Stats */}
+                        <div className="stats-row">
+                            <div className="stat-card green">
+                                <div className="stat-value">✓</div>
+                                <div className="stat-label">Project Approved</div>
+                            </div>
+                            <div className="stat-card red">
+                                <div className="stat-value">6</div>
+                                <div className="stat-label">Days Insurance Pending</div>
+                            </div>
+                            <div className="stat-card orange">
+                                <div className="stat-value">5</div>
+                                <div className="stat-label">Days to Signature</div>
+                            </div>
+                            <div className="stat-card">
+                                <div className="stat-value">$20M</div>
+                                <div className="stat-label">Insurance Required</div>
+                            </div>
+                        </div>
+
+                        {/* Technical Specifications */}
+                        <section className="section">
+                            <h2 className="section-title">Technical Specifications & Scope</h2>
+                            <div className="grid">
+                                <div className="card">
+                                    <div className="card-header">
+                                        <div className="card-icon icon-blue">📍</div>
+                                        <h3 className="card-title">Project Location</h3>
+                                    </div>
+                                    <div className="card-content">
+                                        <p><strong>Location:</strong> Queensland, Australia</p>
+                                        <p style={{marginTop: '8px'}}><strong>Network:</strong> Powerlink Queensland (PLQ)</p>
+                                        <p style={{marginTop: '8px'}}><strong>Connection Voltage:</strong> 66kV</p>
+                                        <p style={{marginTop: '8px'}}><strong>Note:</strong> PLQ enquiry indicates significant loading on 66kV network</p>
+                                    </div>
+                                </div>
+
+                                <div className="card">
+                                    <div className="card-header">
+                                        <div className="card-icon icon-green">⚡</div>
+                                        <h3 className="card-title">Project Type</h3>
+                                    </div>
+                                    <div className="card-content">
+                                        <p><strong>Technology:</strong> Wind Farm + Battery Energy Storage System (BESS)</p>
+                                        <p style={{marginTop: '8px'}}><strong>Study Type:</strong> Grid Connection Studies</p>
+                                        <p style={{marginTop: '8px'}}><strong>Methodology:</strong> Powerlink Queensland Three-Stage Approach</p>
+                                    </div>
+                                </div>
+
+                                <div className="card">
+                                    <div className="card-header">
+                                        <div className="card-icon icon-orange">🔬</div>
+                                        <h3 className="card-title">Technical Studies</h3>
+                                    </div>
+                                    <div className="card-content">
+                                        <p>• PowerFactory Network Modeling</p>
+                                        <p style={{marginTop: '6px'}}>• Harmonics Analysis & Filter Design</p>
+                                        <p style={{marginTop: '6px'}}>• Network Loading Analysis (66kV)</p>
+                                        <p style={{marginTop: '6px'}}>• Capacity Assessment</p>
+                                        <p style={{marginTop: '6px'}}>• Compliance Assessment</p>
+                                    </div>
+                                </div>
+
+                                <div className="card">
+                                    <div className="card-header">
+                                        <div className="card-icon icon-purple">📅</div>
+                                        <h3 className="card-title">Cedric's Timeline Requirements</h3>
+                                    </div>
+                                    <div className="card-content">
+                                        <p><strong>Phase 1 (Pre-Christmas 2025):</strong></p>
+                                        <p style={{marginTop: '6px'}}>• Capacity Assessment</p>
+                                        <p style={{marginTop: '6px'}}>• Concept Design Finalization</p>
+                                        <p style={{marginTop: '6px'}}>• Target Delivery: Dec 20, 2025</p>
+                                        <p style={{marginTop: '12px'}}><strong>Phase 2 (Q1 2026):</strong></p>
+                                        <p style={{marginTop: '6px'}}>• Connection Application</p>
+                                        <p style={{marginTop: '6px'}}>• Start: Late Jan / Early Feb 2026</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="card" style={{marginTop: '25px', border: '3px solid #00a651'}}>
+                                <div className="card-header">
+                                    <div className="card-icon icon-blue">🗺️</div>
+                                    <h3 className="card-title">Project Location - Queensland</h3>
+                                </div>
+                                <div className="card-content">
+                                    <div style={{background: '#f8f9fa', padding: '20px', borderRadius: '8px', textAlign: 'center'}}>
+                                        <p style={{fontSize: '1.1em', marginBottom: '15px'}}><strong>Mt Challenger Wind Farm + BESS Project</strong></p>
+                                        <p style={{marginBottom: '10px'}}>📍 <strong>Queensland, Australia</strong></p>
+                                        <p style={{marginBottom: '10px'}}>🔌 Connected to <strong>Powerlink Queensland (PLQ)</strong> 66kV Network</p>
+                                        <p style={{fontSize: '0.9em', color: '#636e72', marginTop: '15px'}}>
+                                            Queensland is experiencing significant renewable energy development with multiple
+                                            wind and solar + storage projects connecting to the Powerlink network. The 66kV
+                                            network shows significant loading per PLQ enquiry response, requiring detailed
+                                            capacity assessment and network studies.
+                                        </p>
+                                        <p style={{fontSize: '0.9em', color: '#636e72', marginTop: '10px'}}>
+                                            <strong>PowerFactory Model:</strong> Available from Ergon for detailed assessment
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* Strategic Value */}
+                        <section className="section">
+                            <h2 className="section-title">Strategic Value</h2>
+                            <div className="grid">
+                                <div className="card">
+                                    <div className="card-header">
+                                        <div className="card-icon icon-purple">🎯</div>
+                                        <h3 className="card-title">Gateway Project</h3>
+                                    </div>
+                                    <div className="card-content">
+                                        <p><strong>Graham (Contracts):</strong> "Linked to higher value opportunity"</p>
+                                        <p style={{marginTop: '10px'}}>This is a door-opener to larger Alinta portfolio. Success here = future work pipeline with major renewable developer.</p>
+                                    </div>
+                                </div>
+
+                                <div className="card">
+                                    <div className="card-header">
+                                        <div className="card-icon icon-blue">⚡</div>
+                                        <h3 className="card-title">Market Position</h3>
+                                    </div>
+                                    <div className="card-content">
+                                        <p>First PLQ project with major renewable developer</p>
+                                        <p style={{marginTop: '10px'}}>Establishes Vysus PLQ methodology credentials in Queensland's growing renewable energy market.</p>
+                                    </div>
+                                </div>
+
+                                <div className="card">
+                                    <div className="card-header">
+                                        <div className="card-icon icon-green">🤝</div>
+                                        <h3 className="card-title">Flexibility Approved</h3>
+                                    </div>
+                                    <div className="card-content">
+                                        <p><strong>Internal Position:</strong> Willing to "loosen stance to get this over the line"</p>
+                                        <p style={{marginTop: '10px'}}>Strategic importance recognized at leadership level.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* Critical Issues */}
+                        <section className="section">
+                            <h2 className="section-title">Critical Issues & Blockers</h2>
+                            <ul className="issue-list">
+                                {issues.map((issue, idx) => (
+                                    <li key={idx} className={`issue-item issue-${issue.priority}`}>
+                                        <div className="issue-icon">{issue.icon}</div>
+                                        <div className="issue-content">
+                                            <h4>{issue.title}</h4>
+                                            <p>{issue.desc}</p>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        </section>
+
+                        {/* Project Timeline */}
+                        <section className="section">
+                            <h2 className="section-title">Project Timeline</h2>
+                            <div className="timeline">
+                                {timeline.map((item, idx) => (
+                                    <div key={idx} className="timeline-item">
+                                        <div className={`timeline-dot status-${item.status}`}>
+                                            {item.icon}
+                                        </div>
+                                        <div className="timeline-content">
+                                            <div className="timeline-date">{item.date}</div>
+                                            <div className="timeline-title">{item.title}</div>
+                                            <div className="timeline-desc">{item.desc}</div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+
+                        {/* Why This Handover is an Upgrade */}
+                        <section className="section">
+                            <div className="card" style={{background: '#00a651', color: 'white', padding: '40px', border: 'none'}}>
+                                <h2 style={{fontSize: '2.2em', marginBottom: '25px', textAlign: 'center'}}>
+                                    🚀 Why This Handover Strengthens Your Project
+                                </h2>
+                                <div className="grid" style={{marginTop: '30px'}}>
+                                    <div style={{textAlign: 'center'}}>
+                                        <div style={{fontSize: '3em', marginBottom: '15px'}}>1️⃣</div>
+                                        <h3 style={{fontSize: '1.4em', marginBottom: '10px'}}>Dedicated Specialists</h3>
+                                        <p style={{opacity: 0.95}}>
+                                            <strong>Before:</strong> Robby wearing multiple hats (commercial + technical + coordination)<br/>
+                                            <strong>Now:</strong> Expert in each role - Chris (commercial), Tony (technical), Graham (contracts)
+                                        </p>
+                                    </div>
+                                    <div style={{textAlign: 'center'}}>
+                                        <div style={{fontSize: '3em', marginBottom: '15px'}}>2️⃣</div>
+                                        <h3 style={{fontSize: '1.4em', marginBottom: '10px'}}>Faster Decisions</h3>
+                                        <p style={{opacity: 0.95}}>
+                                            <strong>Chris = Operations Director</strong> with full authority<br/>
+                                            No waiting for internal approvals - decisions made on the spot during your project
+                                        </p>
+                                    </div>
+                                    <div style={{textAlign: 'center'}}>
+                                        <div style={{fontSize: '3em', marginBottom: '15px'}}>3️⃣</div>
+                                        <h3 style={{fontSize: '1.4em', marginBottom: '10px'}}>Technical Continuity</h3>
+                                        <p style={{opacity: 0.95}}>
+                                            <strong>Tony Morton</strong> wrote your PLQ methodology from day one<br/>
+                                            Zero technical disruption - same expert delivering the work
+                                        </p>
+                                    </div>
+                                    <div style={{textAlign: 'center'}}>
+                                        <div style={{fontSize: '3em', marginBottom: '15px'}}>4️⃣</div>
+                                        <h3 style={{fontSize: '1.4em', marginBottom: '10px'}}>Deeper Bench Strength</h3>
+                                        <p style={{opacity: 0.95}}>
+                                            More resources, expertise, and support backing your project<br/>
+                                            Senior leadership visibility ensures priority and attention
+                                        </p>
+                                    </div>
+                                </div>
+                                <div style={{textAlign: 'center', marginTop: '35px', fontSize: '1.3em', fontWeight: '600', padding: '20px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px'}}>
+                                    💡 Bottom Line: You're getting a <strong>stronger, more capable team</strong> with this handover
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* Team Structure */}
+                        <section className="section">
+                            <h2 className="section-title">New Team Structure</h2>
+                            <div className="team-grid">
+                                {team.map((member, idx) => (
+                                    <div key={idx} className="team-member">
+                                        <div className={`team-avatar avatar-${member.color}`}>
+                                            {member.avatar}
+                                        </div>
+                                        <div className="team-name">{member.name}</div>
+                                        <div className="team-role">{member.role}</div>
+                                        <div className="team-role" style={{marginTop: '5px', fontWeight: '600', color: member.status === 'NEW' ? '#00a651' : member.status === 'DEPARTING' ? '#f7941d' : '#00a651'}}>
+                                            {member.status}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+
+                        {/* Immediate Actions */}
+                        <section className="section">
+                            <h2 className="section-title">Immediate Actions - TODAY</h2>
+                            <ul className="action-list">
+                                {actions.map((action, idx) => (
+                                    <li key={idx} className="action-item">
+                                        <div className={`action-checkbox ${action.done ? 'checked' : ''}`}>
+                                            {action.done && '✓'}
+                                        </div>
+                                        <div className="action-text">{action.text}</div>
+                                        <span className={`action-priority priority-${action.priority}`}>
+                                            {action.priority.toUpperCase()}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </section>
+
+                        {/* Key Messages for Cedric */}
+                        <section className="section">
+                            <h2 className="section-title">Key Messages for Client Meeting</h2>
+                            <div className="grid">
+                                <div className="card">
+                                    <div className="card-header">
+                                        <div className="card-icon icon-blue">💪</div>
+                                        <h3 className="card-title">Stronger Team</h3>
+                                    </div>
+                                    <div className="card-content">
+                                        <p>"You're getting an upgrade - dedicated specialists instead of Robby wearing all hats. Deeper bench strength."</p>
+                                    </div>
+                                </div>
+
+                                <div className="card">
+                                    <div className="card-header">
+                                        <div className="card-icon icon-green">🔧</div>
+                                        <h3 className="card-title">Technical Continuity</h3>
+                                    </div>
+                                    <div className="card-content">
+                                        <p>"Tony Morton was core from day one - he wrote the PLQ methodology. Nothing changes in technical delivery."</p>
+                                    </div>
+                                </div>
+
+                                <div className="card">
+                                    <div className="card-header">
+                                        <div className="card-icon icon-orange">🛡️</div>
+                                        <h3 className="card-title">Insurance Solution</h3>
+                                    </div>
+                                    <div className="card-content">
+                                        <p>"We've reviewed with our team and insurers. Here's our solution [present options]. We're committed to resolving this."</p>
+                                    </div>
+                                </div>
+
+                                <div className="card">
+                                    <div className="card-header">
+                                        <div className="card-icon icon-purple">📅</div>
+                                        <h3 className="card-title">Timeline Commitment</h3>
+                                    </div>
+                                    <div className="card-content">
+                                        <p>"We're committed to your December start. What do you need from your legal and management teams to make that happen?"</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* Call to Action */}
+                        <div className="cta-section">
+                            <h2 className="cta-title">Success Today = Contract by Nov 29 = December Kickoff</h2>
+                            <p className="cta-text">
+                                This meeting sets the tone for the entire project. Show confidence, unity, and capability.
+                                Position the handover as a strength. Address insurance head-on. Lock the timeline.
+                            </p>
+                            <div className="cta-buttons">
+                                <button className="btn btn-primary" onClick={() => window.print()}>
+                                    📄 Print Briefing
+                                </button>
+                                <button className="btn btn-secondary" onClick={() => alert('Meeting Checklist:\n\n✓ Insurance decision made\n✓ RACI chart prepared\n✓ Team briefed on roles\n✓ Questions for Cedric ready\n✓ Professional confidence\n\nYou\'ve got this!')}>
+                                    ✓ Meeting Checklist
+                                </button>
+                            </div>
+                            <div style={{marginTop: '30px', fontSize: '1.2em', fontWeight: '600'}}>
+                                🎯 OBJECTIVE: Leave Cedric thinking "This team is stronger, professional, and ready to deliver"
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<MtChallengerDashboard />, document.getElementById('root'));
+    </script>
+</body>
+</html>

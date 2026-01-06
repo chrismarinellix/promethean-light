@@ -95,6 +95,7 @@ _hybrid_searcher = None
 _anonymizer = None
 _chatbot = None
 _startup_event: Optional[threading.Event] = None
+_email_watchers: List = []
 
 # Rebuild state for background task tracking
 _rebuild_state = {
@@ -112,9 +113,9 @@ _rebuild_state = {
 }
 
 
-def init_services(crypto, db, storage, embedder, vectordb, pipeline, hybrid_searcher=None, anonymizer=None, startup_event=None):
+def init_services(crypto, db, storage, embedder, vectordb, pipeline, hybrid_searcher=None, anonymizer=None, startup_event=None, email_watchers=None):
     """Initialize services from daemon (skip startup event)"""
-    global _db, _crypto, _storage, _embedder, _vectordb, _pipeline, _hybrid_searcher, _anonymizer, _startup_event
+    global _db, _crypto, _storage, _embedder, _vectordb, _pipeline, _hybrid_searcher, _anonymizer, _startup_event, _email_watchers
     _crypto = crypto
     _db = db
     _storage = storage
@@ -124,6 +125,8 @@ def init_services(crypto, db, storage, embedder, vectordb, pipeline, hybrid_sear
     _hybrid_searcher = hybrid_searcher
     _anonymizer = anonymizer
     _startup_event = startup_event
+    # Keep reference to the list (don't use 'or []' which creates new list)
+    _email_watchers = email_watchers if email_watchers is not None else []
 
 
 @app.on_event("startup")
@@ -331,6 +334,76 @@ async def search(request: SearchRequest) -> List[SearchResult]:
     return search_results
 
 
+class EmailListRequest(BaseModel):
+    days: int = 7
+    limit: int = 50
+    sender: Optional[str] = None
+
+
+@app.post("/emails/list")
+async def list_emails(request: EmailListRequest):
+    """Get structured list of emails with metadata"""
+    if not _db:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    from datetime import datetime, timedelta
+    from sqlmodel import or_
+
+    session = _db.session()
+    cutoff = datetime.utcnow() - timedelta(days=request.days)
+
+    # Query emails from the database
+    query = select(Document).where(
+        Document.source.like("email:%"),
+        Document.created_at >= cutoff
+    ).order_by(Document.created_at.desc()).limit(request.limit)
+
+    docs = session.exec(query).all()
+
+    emails = []
+    for doc in docs:
+        # Parse email metadata from source and raw_text
+        source_parts = doc.source.split(":", 1) if doc.source else ["email", ""]
+        email_info = source_parts[1] if len(source_parts) > 1 else ""
+
+        # Extract sender from raw_text if available
+        sender = ""
+        subject = ""
+        raw = doc.raw_text or ""
+
+        # Simple extraction from email content
+        lines = raw.split("\n")
+        for line in lines[:10]:  # Check first 10 lines for headers
+            if line.lower().startswith("from:"):
+                sender = line[5:].strip()
+            elif line.lower().startswith("subject:"):
+                subject = line[8:].strip()
+
+        # If no subject found, use first line as preview
+        if not subject and lines:
+            subject = lines[0][:100] + ("..." if len(lines[0]) > 100 else "")
+
+        emails.append({
+            "id": doc.id,
+            "sender": sender or email_info,
+            "subject": subject,
+            "date": doc.created_at.isoformat() if doc.created_at else "",
+            "preview": raw[:200] + ("..." if len(raw) > 200 else ""),
+            "source": doc.source
+        })
+
+    # Filter by sender if specified
+    if request.sender:
+        sender_lower = request.sender.lower()
+        emails = [e for e in emails if sender_lower in e["sender"].lower()]
+
+    return {
+        "count": len(emails),
+        "emails": emails,
+        "period_days": request.days
+    }
+
+
 @app.get("/documents/{doc_id}")
 async def get_document(doc_id: str):
     """Get document by ID"""
@@ -381,7 +454,7 @@ async def get_stats() -> StatsResponse:
         source = doc.source.lower() if doc.source else ""
         if "email" in source or "@" in source or "outlook" in source or source.startswith("/o="):
             emails += 1
-            # Track most recent email
+            # Track most recent email - use created_at as ingestion timestamp
             if doc.created_at:
                 if last_email_at is None or doc.created_at > last_email_at:
                     last_email_at = doc.created_at
@@ -403,8 +476,8 @@ async def get_stats() -> StatsResponse:
         "last_email_at": last_email_at.isoformat() if last_email_at else None,
     }
 
-    # Cache for 5 minutes
-    cache.set("stats", stats)
+    # Cache for 30 seconds only (emails can arrive frequently)
+    cache.set("stats", stats, ttl=30)
 
     return StatsResponse(**stats)
 
@@ -677,6 +750,82 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Chat failed: {str(e)}")
+
+
+class ChatDebugRequest(BaseModel):
+    message: str
+
+
+@app.post("/chat/debug")
+async def chat_debug(request: ChatDebugRequest):
+    """Debug endpoint to see how RAG processes a query without calling LLM"""
+    if not _db or not _embedder or not _vectordb:
+        raise HTTPException(status_code=503, detail="Service not available")
+
+    from .chatbot import ChatBot
+    from . import summaries
+
+    session = _db.session()
+    query = request.message
+
+    debug_info = {
+        "query": query,
+        "query_lower": query.lower(),
+        "summary_matched": None,
+        "summary_keywords_checked": {},
+        "vector_results_count": 0,
+        "vector_results_preview": [],
+        "hybrid_search_enabled": _hybrid_searcher is not None,
+    }
+
+    # Check which summary keywords would match
+    keyword_checks = {
+        "sentinel": ["sentinel", "project sentinel", "prize draw", "macbook prize"],
+        "salary_table": ["team pay", "all pay", "salary table", "all salaries", "compensation", "staff salaries", "salaries", "salary", "wages", "pay", "staff pay", "all staff"],
+        "staff": ["staff", "team", "employee", "people", "members", "who works"],
+        "retention": ["retention", "bonus", "bonuses"],
+    }
+
+    query_lower = query.lower()
+    for category, keywords in keyword_checks.items():
+        matches = [kw for kw in keywords if kw in query_lower]
+        debug_info["summary_keywords_checked"][category] = {
+            "keywords": keywords[:5],  # Show first 5
+            "matched": matches,
+            "would_trigger": len(matches) > 0
+        }
+        if matches:
+            debug_info["summary_matched"] = category
+
+    # Get vector search results
+    query_vector = _embedder.embed(query)
+    vector_results = _vectordb.search(query_vector=query_vector, limit=10)
+    debug_info["vector_results_count"] = len(vector_results)
+
+    for hit in vector_results[:5]:
+        payload = hit.get("payload", {})
+        debug_info["vector_results_preview"].append({
+            "score": round(hit.get("score", 0), 4),
+            "source": payload.get("source", "")[:50],
+            "text_preview": payload.get("text", "")[:100] + "..."
+        })
+
+    # Check if summaries module has data
+    try:
+        aus = summaries.get_australia_staff_summary()
+        india = summaries.get_india_staff_summary()
+        debug_info["summaries_available"] = {
+            "australia_staff": len(aus.get("staff", [])) if aus else 0,
+            "india_staff": len(india.get("staff", [])) if india else 0,
+        }
+    except Exception as e:
+        debug_info["summaries_error"] = str(e)
+
+    # Suggestion
+    if not debug_info["summary_matched"]:
+        debug_info["suggestion"] = "Try using keywords like 'staff table', 'all salaries', 'team pay', or 'show all staff' to trigger the complete pre-computed data tables."
+
+    return debug_info
 
 
 # War Room intelligence view
@@ -1407,3 +1556,344 @@ async def refresh_summaries():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to refresh summaries: {str(e)}")
+
+
+@app.post("/email/sync")
+async def sync_emails():
+    """
+    Trigger immediate email sync from Outlook.
+    Returns sync status and last email timestamp.
+    """
+    if not _email_watchers:
+        raise HTTPException(status_code=503, detail="No email watchers configured")
+
+    results = []
+    for watcher in _email_watchers:
+        # Check if watcher has sync_now method (OutlookWatcher does)
+        if hasattr(watcher, 'sync_now'):
+            result = watcher.sync_now()
+            results.append(result)
+        elif hasattr(watcher, '_check_new_emails'):
+            # Fallback for other watchers
+            try:
+                watcher._check_new_emails()
+                results.append({"status": "ok", "message": "Sync triggered"})
+            except Exception as e:
+                results.append({"status": "error", "message": str(e)})
+
+    # Aggregate results
+    success_count = sum(1 for r in results if r.get("status") == "ok")
+
+    # Invalidate stats cache so fresh data is returned
+    cache = get_cache()
+    cache.invalidate("stats")
+
+    return {
+        "success": success_count > 0,
+        "message": f"Synced {success_count}/{len(results)} email source(s)",
+        "results": results
+    }
+
+
+# Resource Allocation API
+class ResourceAllocationRequest(BaseModel):
+    week: str
+    allocations: str  # JSON string
+    project_notes: str = "{}"
+    project_status: str = "{}"
+
+
+class ResourceAllocationResponse(BaseModel):
+    id: int
+    week: str
+    allocations: str
+    project_notes: str
+    project_status: str
+    created_at: str
+    updated_at: str
+
+
+@app.get("/resource-allocation/{week}")
+async def get_resource_allocation(week: str) -> Optional[ResourceAllocationResponse]:
+    """Get resource allocation for a specific week"""
+    if not _db:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    from .models import ResourceAllocation
+
+    session = _db.session()
+
+    allocation = session.exec(
+        select(ResourceAllocation).where(ResourceAllocation.week == week)
+    ).first()
+
+    if not allocation:
+        return None
+
+    return ResourceAllocationResponse(
+        id=allocation.id,
+        week=allocation.week,
+        allocations=allocation.allocations,
+        project_notes=allocation.project_notes,
+        project_status=allocation.project_status,
+        created_at=allocation.created_at.isoformat(),
+        updated_at=allocation.updated_at.isoformat()
+    )
+
+
+@app.post("/resource-allocation")
+async def save_resource_allocation(request: ResourceAllocationRequest) -> ResourceAllocationResponse:
+    """Save or update resource allocation for a week"""
+    if not _db:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    from .models import ResourceAllocation
+    from datetime import datetime
+
+    session = _db.session()
+
+    # Check if allocation exists for this week
+    existing = session.exec(
+        select(ResourceAllocation).where(ResourceAllocation.week == request.week)
+    ).first()
+
+    if existing:
+        existing.allocations = request.allocations
+        existing.project_notes = request.project_notes
+        existing.project_status = request.project_status
+        existing.updated_at = datetime.utcnow()
+        session.add(existing)
+        session.commit()
+        session.refresh(existing)
+        allocation = existing
+    else:
+        allocation = ResourceAllocation(
+            week=request.week,
+            allocations=request.allocations,
+            project_notes=request.project_notes,
+            project_status=request.project_status,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        session.add(allocation)
+        session.commit()
+        session.refresh(allocation)
+
+    return ResourceAllocationResponse(
+        id=allocation.id,
+        week=allocation.week,
+        allocations=allocation.allocations,
+        project_notes=allocation.project_notes,
+        project_status=allocation.project_status,
+        created_at=allocation.created_at.isoformat(),
+        updated_at=allocation.updated_at.isoformat()
+    )
+
+
+@app.get("/resource-allocation")
+async def list_resource_allocations(limit: int = 52) -> List[ResourceAllocationResponse]:
+    """List all resource allocations (most recent first)"""
+    if not _db:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    from .models import ResourceAllocation
+
+    session = _db.session()
+
+    allocations = session.exec(
+        select(ResourceAllocation)
+        .order_by(ResourceAllocation.week.desc())
+        .limit(limit)
+    ).all()
+
+    return [
+        ResourceAllocationResponse(
+            id=a.id,
+            week=a.week,
+            allocations=a.allocations,
+            project_notes=a.project_notes,
+            project_status=a.project_status,
+            created_at=a.created_at.isoformat(),
+            updated_at=a.updated_at.isoformat()
+        )
+        for a in allocations
+    ]
+
+
+# =====================
+# STAKEHOLDER CRM API
+# =====================
+
+class StakeholderDataRequest(BaseModel):
+    stakeholders: dict
+    meetings: list = []
+
+
+class StakeholderDataResponse(BaseModel):
+    id: int
+    stakeholders: dict
+    meetings: list
+    created_at: str
+    updated_at: str
+
+
+@app.get("/stakeholders")
+async def get_stakeholders() -> Optional[StakeholderDataResponse]:
+    """Get stakeholder CRM data"""
+    if not _db:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    from .models import StakeholderData
+    import json
+
+    session = _db.session()
+
+    data = session.exec(
+        select(StakeholderData).where(StakeholderData.data_key == "default")
+    ).first()
+
+    if not data:
+        return None
+
+    return StakeholderDataResponse(
+        id=data.id,
+        stakeholders=json.loads(data.stakeholders),
+        meetings=json.loads(data.meetings),
+        created_at=data.created_at.isoformat(),
+        updated_at=data.updated_at.isoformat()
+    )
+
+
+@app.post("/stakeholders")
+async def save_stakeholders(request: StakeholderDataRequest) -> StakeholderDataResponse:
+    """Save stakeholder CRM data"""
+    if not _db:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    from .models import StakeholderData
+    from datetime import datetime
+    import json
+
+    session = _db.session()
+
+    # Check if data exists
+    existing = session.exec(
+        select(StakeholderData).where(StakeholderData.data_key == "default")
+    ).first()
+
+    if existing:
+        existing.stakeholders = json.dumps(request.stakeholders)
+        existing.meetings = json.dumps(request.meetings)
+        existing.updated_at = datetime.utcnow()
+        session.add(existing)
+        session.commit()
+        session.refresh(existing)
+        data = existing
+    else:
+        data = StakeholderData(
+            data_key="default",
+            stakeholders=json.dumps(request.stakeholders),
+            meetings=json.dumps(request.meetings),
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        session.add(data)
+        session.commit()
+        session.refresh(data)
+
+    return StakeholderDataResponse(
+        id=data.id,
+        stakeholders=json.loads(data.stakeholders),
+        meetings=json.loads(data.meetings),
+        created_at=data.created_at.isoformat(),
+        updated_at=data.updated_at.isoformat()
+    )
+
+
+@app.post("/email/reset-state")
+async def reset_email_state():
+    """Reset Outlook watcher state to force re-processing of recent emails"""
+    if not _email_watchers:
+        raise HTTPException(status_code=503, detail="No email watchers configured")
+
+    results = []
+    for watcher in _email_watchers:
+        try:
+            # Reset last processed time to None (will reload history_hours of emails)
+            if hasattr(watcher, '_last_processed_time'):
+                old_time = watcher._last_processed_time
+                old_seen_count = len(watcher._seen_ids) if hasattr(watcher, '_seen_ids') else 0
+                watcher._last_processed_time = None
+                if hasattr(watcher, '_seen_ids'):
+                    watcher._seen_ids.clear()
+
+                # Delete state file if exists
+                if hasattr(watcher, 'state_file') and watcher.state_file.exists():
+                    watcher.state_file.unlink()
+
+                results.append({
+                    "status": "ok",
+                    "message": f"Reset from {old_time}, cleared {old_seen_count} seen IDs",
+                    "type": type(watcher).__name__
+                })
+            else:
+                results.append({
+                    "status": "skip",
+                    "message": "Watcher has no state to reset"
+                })
+        except Exception as e:
+            results.append({
+                "status": "error",
+                "message": str(e)
+            })
+
+    return {
+        "success": any(r.get("status") == "ok" for r in results),
+        "message": "State reset - next sync will reload emails",
+        "results": results
+    }
+
+
+@app.get("/email/status")
+async def email_status():
+    """Get email sync status - last sync time, watcher status, etc."""
+    if not _db:
+        raise HTTPException(status_code=503, detail="Database not initialized")
+
+    session = _db.session()
+
+    # Get last email timestamp
+    last_email_at = None
+    email_count = 0
+
+    try:
+        documents = session.exec(select(Document)).all()
+        for doc in documents:
+            source = (doc.source or "").lower()
+            if "email" in source or "@" in source or "outlook" in source:
+                email_count += 1
+                if last_email_at is None or doc.created_at > last_email_at:
+                    last_email_at = doc.created_at
+    except Exception:
+        pass
+
+    # Get watcher status
+    watcher_info = []
+    for i, watcher in enumerate(_email_watchers):
+        info = {
+            "index": i,
+            "running": watcher.is_running() if hasattr(watcher, 'is_running') else False,
+            "type": type(watcher).__name__
+        }
+        if hasattr(watcher, '_last_processed_time') and watcher._last_processed_time:
+            info["last_processed"] = watcher._last_processed_time.isoformat()
+        if hasattr(watcher, '_seen_ids'):
+            info["emails_tracked"] = len(watcher._seen_ids)
+        watcher_info.append(info)
+
+    return {
+        "email_count": email_count,
+        "last_email_at": last_email_at.isoformat() if last_email_at else None,
+        "watchers": watcher_info,
+        "watcher_count": len(_email_watchers)
+    }

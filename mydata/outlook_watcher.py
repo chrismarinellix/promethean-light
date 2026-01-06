@@ -62,6 +62,13 @@ class OutlookWatcher:
 
     def start(self) -> None:
         """Start watching inbox"""
+        # Initialize COM for this thread (required for win32com in threads)
+        try:
+            import pythoncom
+            pythoncom.CoInitialize()
+        except Exception as e:
+            print(f"[WARN] COM initialization: {e}")
+
         if not self.connect():
             return
 
@@ -90,6 +97,12 @@ class OutlookWatcher:
         inbox_count = 0
         sent_count = 0
 
+        # Debug: show what we're looking for
+        if self._last_processed_time:
+            print(f"[EMAIL-DEBUG] [{check_time}] Checking for emails after: {self._last_processed_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        else:
+            print(f"[EMAIL-DEBUG] [{check_time}] First run - looking back {self.history_hours} hours")
+
         # Process inbox
         if self._inbox:
             inbox_count = self._process_folder(self._inbox, "inbox")
@@ -111,6 +124,8 @@ class OutlookWatcher:
             print(f"   - Total tracked: {len(self._seen_ids)} emails")
             # Save state after processing new emails
             self._save_state()
+        else:
+            print(f"[EMAIL-DEBUG] [{check_time}] No new emails found (seen: {len(self._seen_ids)}, cutoff: {self._last_processed_time})")
 
     def _process_folder(self, folder, folder_name: str) -> int:
         """Process emails from a specific folder"""
@@ -138,7 +153,13 @@ class OutlookWatcher:
                         continue
 
                     # Check if recent (last hour)
-                    received_time = msg.ReceivedTime
+                    # Some items (calendar invites, etc.) may not have ReceivedTime
+                    try:
+                        received_time = msg.ReceivedTime
+                    except Exception:
+                        # Mark as seen to avoid repeated errors
+                        self._seen_ids.add(entry_id)
+                        continue
                     if isinstance(received_time, str):
                         # Parse if string
                         continue
@@ -213,6 +234,23 @@ class OutlookWatcher:
     def is_running(self) -> bool:
         """Check if watcher is running"""
         return self._running
+
+    def sync_now(self) -> dict:
+        """Trigger an immediate email sync (called from API)"""
+        if not self._running:
+            return {"status": "error", "message": "Watcher not running"}
+
+        try:
+            print("[EMAIL] Manual sync triggered...")
+            self._check_new_emails()
+            return {
+                "status": "ok",
+                "message": "Sync completed",
+                "emails_tracked": len(self._seen_ids),
+                "last_sync": self._last_processed_time.isoformat() if self._last_processed_time else None
+            }
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
 
     def _load_state(self) -> None:
         """Load previous state from disk"""

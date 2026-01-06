@@ -146,12 +146,18 @@ class ChatBot:
             return self._format_sentinel_summary()
 
         # Team pay / salary queries - most specific first
-        pay_keywords = ["team pay", "all pay", "salary table", "all salaries", "compensation", "pay structure", "staff salaries"]
+        pay_keywords = ["team pay", "all pay", "salary table", "all salaries", "compensation", "pay structure", "staff salaries", "salaries", "salary", "wages", "pay", "everyone's salary", "staff pay", "employee salaries", "australian staff", "australia staff", "india staff", "all staff"]
         if any(kw in query_lower for kw in pay_keywords):
             return self._format_all_staff_table()
 
+        # Table requests - user wants structured data
+        table_keywords = ["table", "show table", "data table", "spreadsheet", "list all", "show all", "complete list", "full list"]
+        if any(kw in query_lower for kw in table_keywords):
+            # Default to staff table for generic table requests
+            return self._format_all_staff_table()
+
         # Staff queries
-        staff_keywords = ["staff", "team", "employee", "people", "members", "who works", "team members"]
+        staff_keywords = ["staff", "team", "employee", "people", "members", "who works", "team members", "headcount", "roster"]
         if any(kw in query_lower for kw in staff_keywords):
             return self._format_staff_summary()
 

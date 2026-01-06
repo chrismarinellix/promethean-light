@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weekly Client Check-In Checklist</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #2c3e50;
+            border-bottom: 4px solid #3498db;
+            padding-bottom: 15px;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        h2 {
+            color: #2c3e50;
+            background-color: #ecf0f1;
+            padding: 12px 15px;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            border-left: 5px solid #3498db;
+            font-size: 18px;
+        }
+
+        h3 {
+            color: #34495e;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .subtitle {
+            color: #7f8c8d;
+            font-size: 14px;
+            margin-bottom: 30px;
+        }
+
+        .header-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 30px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+
+        .header-field {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header-field label {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .header-field input {
+            padding: 8px 12px;
+            border: 1px solid #bdc3c7;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .checkbox-group {
+            margin-bottom: 20px;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+            transition: background-color 0.2s;
+        }
+
+        .checkbox-item:hover {
+            background-color: #f8f9fa;
+            padding-left: 5px;
+        }
+
+        .checkbox-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            margin-right: 10px;
+            cursor: pointer;
+            accent-color: #3498db;
+        }
+
+        .checkbox-item label {
+            cursor: pointer;
+            flex: 1;
+            font-size: 14px;
+        }
+
+        .notes-field {
+            margin-top: 10px;
+            margin-bottom: 15px;
+        }
+
+        .notes-field label {
+            font-weight: 600;
+            color: #34495e;
+            display: block;
+            margin-bottom: 5px;
+            font-size: 13px;
+        }
+
+        .notes-field input[type="text"],
+        .notes-field textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #bdc3c7;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 14px;
+        }
+
+        .notes-field textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        .section {
+            margin-bottom: 25px;
+            padding-bottom: 25px;
+            border-bottom: 1px solid #ecf0f1;
+        }
+
+        .section:last-child {
+            border-bottom: none;
+        }
+
+        .health-rating {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        .health-option {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .health-option:hover {
+            border-color: #3498db;
+            background-color: #f8f9fa;
+        }
+
+        .health-option input[type="radio"] {
+            margin-right: 10px;
+            cursor: pointer;
+            width: 18px;
+            height: 18px;
+        }
+
+        .health-option.green {
+            border-color: #27ae60;
+        }
+
+        .health-option.green input:checked {
+            accent-color: #27ae60;
+        }
+
+        .health-option.yellow {
+            border-color: #f39c12;
+        }
+
+        .health-option.yellow input:checked {
+            accent-color: #f39c12;
+        }
+
+        .health-option.red {
+            border-color: #e74c3c;
+        }
+
+        .health-option.red input:checked {
+            accent-color: #e74c3c;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px solid #ecf0f1;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background-color: #3498db;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #2980b9;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .btn-secondary {
+            background-color: #95a5a6;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background-color: #7f8c8d;
+        }
+
+        .btn-success {
+            background-color: #27ae60;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background-color: #229954;
+        }
+
+        @media print {
+            body {
+                background-color: white;
+                padding: 0;
+            }
+
+            .container {
+                box-shadow: none;
+                padding: 20px;
+            }
+
+            .action-buttons {
+                display: none;
+            }
+
+            .checkbox-item:hover {
+                background-color: transparent;
+            }
+        }
+
+        .alert {
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .alert-info {
+            background-color: #d1ecf1;
+            border-left: 5px solid #0c5460;
+            color: #0c5460;
+        }
+
+        .divider {
+            border-top: 2px dashed #bdc3c7;
+            margin: 30px 0;
+        }
+
+        .footer-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Weekly Client Check-In Checklist</h1>
+        <p class="subtitle">Grid Connection Studies - Standard Template</p>
+
+        <div class="alert alert-info">
+            <strong>💡 Tip:</strong> Fill this out during or immediately after your client meeting. Check boxes as you go, add notes where needed. Takes 5-10 minutes.
+        </div>
+
+        <div class="header-info">
+            <div class="header-field">
+                <label for="project">Project:</label>
+                <input type="text" id="project" name="project" placeholder="Enter project name">
+            </div>
+            <div class="header-field">
+                <label for="client">Client:</label>
+                <input type="text" id="client" name="client" placeholder="Enter client name">
+            </div>
+            <div class="header-field">
+                <label for="engineer">Engineer:</label>
+                <input type="text" id="engineer" name="engineer" placeholder="Your name">
+            </div>
+            <div class="header-field">
+                <label for="weekEnding">Week Ending:</label>
+                <input type="date" id="weekEnding" name="weekEnding">
+            </div>
+        </div>
+
+        <!-- Section 1: Project Progress & Status -->
+        <h2>1. PROJECT PROGRESS & STATUS</h2>
+        <div class="section">
+            <h3>Current Work Status</h3>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="status-planned" name="status">
+                    <label for="status-planned">Work progressing as planned</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="status-minor" name="status">
+                    <label for="status-minor">Minor delays (explain below)</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="status-significant" name="status">
+                    <label for="status-significant">Significant delays (explain below)</label>
+                </div>
+            </div>
+            <div class="notes-field">
+                <label for="status-notes">Notes:</label>
+                <textarea id="status-notes" name="status-notes"></textarea>
+            </div>
+
+            <h3>Deliverables This Week</h3>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="deliv-track" name="deliverables">
+                    <label for="deliv-track">All deliverables on track</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="deliv-delayed" name="deliverables">
+                    <label for="deliv-delayed">Some deliverables delayed</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="deliv-new" name="deliverables">
+                    <label for="deliv-new">New deliverables requested</label>
+                </div>
+            </div>
+            <div class="notes-field">
+                <label for="deliv-details">Details:</label>
+                <textarea id="deliv-details" name="deliv-details"></textarea>
+            </div>
+        </div>
+
+        <!-- Section 2: Scope Changes & Variations -->
+        <h2>2. SCOPE CHANGES & VARIATIONS</h2>
+        <div class="section">
+            <h3>Has the client mentioned any new requirements?</h3>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="scope-no-changes" name="scope-new">
+                    <label for="scope-no-changes">No changes</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="scope-minor" name="scope-new">
+                    <label for="scope-minor">Minor additions discussed (capture below)</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="scope-significant" name="scope-new">
+                    <label for="scope-significant">Significant scope change discussed (capture below)</label>
+                </div>
+            </div>
+            <div class="notes-field">
+                <label for="scope-description">Description:</label>
+                <textarea id="scope-description" name="scope-description"></textarea>
+            </div>
+
+            <h3>Have you identified any scope creep?</h3>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="creep-no" name="scope-creep">
+                    <label for="creep-no">No scope creep</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="creep-potential" name="scope-creep">
+                    <label for="creep-potential">Potential scope creep identified</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="creep-out-of-scope" name="scope-creep">
+                    <label for="creep-out-of-scope">Client requesting out-of-scope work</label>
+                </div>
+            </div>
+            <div class="notes-field">
+                <label for="creep-details">Details:</label>
+                <textarea id="creep-details" name="creep-details"></textarea>
+            </div>
+
+            <h3>Has the client asked about additional services?</h3>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="additional-no" name="additional-services">
+                    <label for="additional-no">No additional services discussed</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="additional-inquiry" name="additional-services">
+                    <label for="additional-inquiry">Client inquiring about add-ons</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="additional-new-project" name="additional-services">
+                    <label for="additional-new-project">New project opportunities mentioned</label>
+                </div>
+            </div>
+            <div class="notes-field">
+                <label for="additional-what">What:</label>
+                <textarea id="additional-what" name="additional-what"></textarea>
+            </div>
+        </div>
+
+        <!-- Section 3: Technical Issues & Blockers -->
+        <h2>3. TECHNICAL ISSUES & BLOCKERS</h2>
+        <div class="section">
+            <h3>Are there any technical issues affecting progress?</h3>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="tech-no-issues" name="tech-issues">
+                    <label for="tech-no-issues">No issues</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="tech-waiting-client" name="tech-issues">
+                    <label for="tech-waiting-client">Waiting on client data/information</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="tech-waiting-network" name="tech-issues">
+                    <label for="tech-waiting-network">Waiting on network operator response</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="tech-complexity" name="tech-issues">
+                    <label for="tech-complexity">Technical complexity identified</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="tech-other" name="tech-issues">
+                    <label for="tech-other">Other (specify below)</label>
+                </div>
+            </div>
+            <div class="notes-field">
+                <label for="tech-details">Details:</label>
+                <textarea id="tech-details" name="tech-details"></textarea>
+            </div>
+
+            <h3>Client Data & Information</h3>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="data-received" name="client-data">
+                    <label for="data-received">All required data received</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="data-waiting" name="client-data">
+                    <label for="data-waiting">Waiting on data (list below)</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="data-quality" name="client-data">
+                    <label for="data-quality">Data quality issues identified</label>
+                </div>
+            </div>
+            <div class="notes-field">
+                <label for="data-needed">What's needed:</label>
+                <textarea id="data-needed" name="data-needed"></textarea>
+            </div>
+
+            <h3>Network Operator / Third Party Issues</h3>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="third-party-no" name="third-party">
+                    <label for="third-party-no">No third-party blockers</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="third-party-network" name="third-party">
+                    <label for="third-party-network">Waiting on network operator response</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="third-party-other" name="third-party">
+                    <label for="third-party-other">Waiting on other third party</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="third-party-delayed" name="third-party">
+                    <label for="third-party-delayed">Connection offer delayed</label>
+                </div>
+            </div>
+            <div class="notes-field">
+                <label for="third-party-details">Details:</label>
+                <textarea id="third-party-details" name="third-party-details"></textarea>
+            </div>
+        </div>
+
+        <!-- Section 4: Client Satisfaction -->
+        <h2>4. CLIENT SATISFACTION</h2>
+        <div class="section">
+            <h3>Client seems satisfied with:</h3>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="sat-quality" name="satisfaction">
+                    <label for="sat-quality">Quality of work</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="sat-communication" name="satisfaction">
+                    <label for="sat-communication">Communication frequency</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="sat-progress" name="satisfaction">
+                    <label for="sat-progress">Progress speed</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="sat-expertise" name="satisfaction">
+                    <label for="sat-expertise">Technical expertise</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="sat-responsive" name="satisfaction">
+                    <label for="sat-responsive">Responsiveness to questions</label>
+                </div>
+            </div>
+            <div class="notes-field">
+                <label for="sat-positive">Positive feedback:</label>
+                <textarea id="sat-positive" name="sat-positive"></textarea>
+            </div>
+
+            <h3>Client has concerns about:</h3>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="concern-no" name="concerns">
+                    <label for="concern-no">No concerns expressed</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="concern-schedule" name="concerns">
+                    <label for="concern-schedule">Schedule/timeline</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="concern-costs" name="concerns">
+                    <label for="concern-costs">Costs/budget</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="concern-technical" name="concerns">
+                    <label for="concern-technical">Technical approach</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="concern-communication" name="concerns">
+                    <label for="concern-communication">Communication</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="concern-quality" name="concerns">
+                    <label for="concern-quality">Quality of deliverables</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="concern-responsiveness" name="concerns">
+                    <label for="concern-responsiveness">Responsiveness</label>
+                </div>
+            </div>
+            <div class="notes-field">
+                <label for="concern-specific">Specific concerns:</label>
+                <textarea id="concern-specific" name="concern-specific"></textarea>
+            </div>
+
+            <h3>Client engagement level</h3>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="engage-high" name="engagement">
+                    <label for="engage-high">Highly engaged and responsive</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="engage-normal" name="engagement">
+                    <label for="engage-normal">Normal engagement</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="engage-difficult" name="engagement">
+                    <label for="engage-difficult">Difficult to reach/unresponsive</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="engage-disengaged" name="engagement">
+                    <label for="engage-disengaged">Appears disengaged</label>
+                </div>
+            </div>
+            <div class="notes-field">
+                <label for="engage-notes">Notes:</label>
+                <textarea id="engage-notes" name="engage-notes"></textarea>
+            </div>
+        </div>
+
+        <!-- Section 5: Schedule & Timeline -->
+        <h2>5. SCHEDULE & TIMELINE</h2>
+        <div class="section">
+            <h3>Current schedule status</h3>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="sched-on" name="schedule-status">
+                    <label for="sched-on">On schedule</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="sched-minor" name="schedule-status">
+                    <label for="sched-minor">Minor delays (explain)</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="sched-significant" name="schedule-status">
+                    <label for="sched-significant">Significant delays (explain)</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="sched-ahead" name="schedule-status">
+                    <label for="sched-ahead">Ahead of schedule</label>
+                </div>
+            </div>
+            <div class="notes-field">
+                <label for="sched-notes">Notes:</label>
+                <textarea id="sched-notes" name="sched-notes"></textarea>
+            </div>
+
+            <h3>Has the client mentioned schedule concerns?</h3>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="sched-concern-no" name="schedule-concerns">
+                    <label for="sched-concern-no">No schedule concerns</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="sched-accelerate" name="schedule-concerns">
+                    <label for="sched-accelerate">Client requesting acceleration</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="sched-delay" name="schedule-concerns">
+                    <label for="sched-delay">Client requesting delay</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="sched-pressure" name="schedule-concerns">
+                    <label for="sched-pressure">Client has external deadline pressure</label>
+                </div>
+            </div>
+            <div class="notes-field">
+                <label for="sched-concern-details">Details:</label>
+                <textarea id="sched-concern-details" name="sched-concern-details"></textarea>
+            </div>
+        </div>
+
+        <!-- Section 6: Budget & Commercial -->
+        <h2>6. BUDGET & COMMERCIAL</h2>
+        <div class="section">
+            <h3>Is the project tracking to budget?</h3>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="budget-on" name="budget-status">
+                    <label for="budget-on">On budget</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="budget-over" name="budget-status">
+                    <label for="budget-over">Over budget (flag for PM)</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="budget-under" name="budget-status">
+                    <label for="budget-under">Under budget</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="budget-inquiry" name="budget-status">
+                    <label for="budget-inquiry">Client inquiring about costs</label>
+                </div>
+            </div>
+            <div class="notes-field">
+                <label for="budget-notes">Notes:</label>
+                <textarea id="budget-notes" name="budget-notes"></textarea>
+            </div>
+
+            <h3>Any commercial issues?</h3>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="commercial-no" name="commercial-issues">
+                    <label for="commercial-no">No commercial issues</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="commercial-questioning" name="commercial-issues">
+                    <label for="commercial-questioning">Client questioning scope/cost</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="commercial-invoice" name="commercial-issues">
+                    <label for="commercial-invoice">Invoice or payment discussion</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="commercial-variation" name="commercial-issues">
+                    <label for="commercial-variation">Variation order needed</label>
+                </div>
+            </div>
+            <div class="notes-field">
+                <label for="commercial-details">Details:</label>
+                <textarea id="commercial-details" name="commercial-details"></textarea>
+            </div>
+        </div>
+
+        <!-- Section 7: Risks & Upcoming Issues -->
+        <h2>7. RISKS & UPCOMING ISSUES</h2>
+        <div class="section">
+            <h3>Are there any emerging risks?</h3>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="risk-no" name="risks">
+                    <label for="risk-no">No new risks</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="risk-technical" name="risks">
+                    <label for="risk-technical">Technical risks identified</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="risk-schedule" name="risks">
+                    <label for="risk-schedule">Schedule risks identified</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="risk-expectation" name="risks">
+                    <label for="risk-expectation">Client expectation risks</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="risk-third-party" name="risks">
+                    <label for="risk-third-party">Third-party risks</label>
+                </div>
+            </div>
+            <div class="notes-field">
+                <label for="risk-description">Description:</label>
+                <textarea id="risk-description" name="risk-description"></textarea>
+            </div>
+
+            <h3>Looking ahead - next 2 weeks</h3>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="ahead-clear" name="ahead">
+                    <label for="ahead-clear">Clear path forward</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="ahead-bottleneck" name="ahead">
+                    <label for="ahead-bottleneck">Potential bottlenecks identified</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="ahead-milestone" name="ahead">
+                    <label for="ahead-milestone">Critical milestones approaching</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="ahead-decision" name="ahead">
+                    <label for="ahead-decision">Client decision required soon</label>
+                </div>
+            </div>
+            <div class="notes-field">
+                <label for="ahead-details">What's coming:</label>
+                <textarea id="ahead-details" name="ahead-details"></textarea>
+            </div>
+        </div>
+
+        <!-- Section 8: Action Items -->
+        <h2>8. ACTION ITEMS</h2>
+        <div class="section">
+            <h3>Actions for our team:</h3>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="action-us-followup" name="action-us">
+                    <label for="action-us-followup">Send follow-up information</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="action-us-schedule" name="action-us">
+                    <label for="action-us-schedule">Schedule next meeting</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="action-us-deliverable" name="action-us">
+                    <label for="action-us-deliverable">Prepare specific deliverable</label>
+                </div>
+            </div>
+            <div class="notes-field">
+                <label for="action-us-other">Other:</label>
+                <input type="text" id="action-us-other" name="action-us-other">
+            </div>
+
+            <h3>Actions for client:</h3>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="action-client-data" name="action-client">
+                    <label for="action-client-data">Provide data/information</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="action-client-review" name="action-client">
+                    <label for="action-client-review">Review deliverable</label>
+                </div>
+            </div>
+            <div class="notes-field">
+                <label for="action-client-decision">Make decision on:</label>
+                <input type="text" id="action-client-decision" name="action-client-decision">
+            </div>
+            <div class="notes-field">
+                <label for="action-client-other">Other:</label>
+                <input type="text" id="action-client-other" name="action-client-other">
+            </div>
+
+            <h3>Actions for third parties:</h3>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="action-third-network" name="action-third">
+                    <label for="action-third-network">Follow up with network operator</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="action-third-consultants" name="action-third">
+                    <label for="action-third-consultants">Coordinate with other consultants</label>
+                </div>
+            </div>
+            <div class="notes-field">
+                <label for="action-third-other">Other:</label>
+                <input type="text" id="action-third-other" name="action-third-other">
+            </div>
+        </div>
+
+        <!-- Section 9: Communication -->
+        <h2>9. COMMUNICATION</h2>
+        <div class="section">
+            <h3>Client preferred contact this week:</h3>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="contact-email" name="contact">
+                    <label for="contact-email">Email only</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="contact-phone" name="contact">
+                    <label for="contact-phone">Phone calls</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="contact-video" name="contact">
+                    <label for="contact-video">Video meetings</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="contact-facetoface" name="contact">
+                    <label for="contact-facetoface">Face-to-face</label>
+                </div>
+            </div>
+
+            <h3>Communication frequency appropriate?</h3>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="freq-good" name="frequency">
+                    <label for="freq-good">Current frequency is good</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="freq-more" name="frequency">
+                    <label for="freq-more">Client wants more frequent updates</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="freq-less" name="frequency">
+                    <label for="freq-less">Client wants less frequent updates</label>
+                </div>
+            </div>
+            <div class="notes-field">
+                <label for="comm-notes">Notes:</label>
+                <textarea id="comm-notes" name="comm-notes"></textarea>
+            </div>
+        </div>
+
+        <!-- Section 10: Overall Project Health -->
+        <h2>10. OVERALL PROJECT HEALTH</h2>
+        <div class="section">
+            <h3>Overall Rating:</h3>
+            <div class="health-rating">
+                <label class="health-option green">
+                    <input type="radio" name="health" value="green">
+                    <span>🟢 Green - Healthy, no concerns</span>
+                </label>
+                <label class="health-option yellow">
+                    <input type="radio" name="health" value="yellow">
+                    <span>🟡 Yellow - Some concerns, manageable</span>
+                </label>
+                <label class="health-option red">
+                    <input type="radio" name="health" value="red">
+                    <span>🔴 Red - Significant concerns, needs attention</span>
+                </label>
+            </div>
+
+            <div style="margin-top: 25px;">
+                <h3>Summary for weekly email:</h3>
+                <div class="notes-field">
+                    <label for="summary-going-well">What's going well:</label>
+                    <textarea id="summary-going-well" name="summary-going-well"></textarea>
+                </div>
+                <div class="notes-field">
+                    <label for="summary-needs-attention">What needs attention:</label>
+                    <textarea id="summary-needs-attention" name="summary-needs-attention"></textarea>
+                </div>
+                <div class="notes-field">
+                    <label for="summary-key-message">Key message for client this week:</label>
+                    <textarea id="summary-key-message" name="summary-key-message"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Engineer Notes -->
+        <h2>ENGINEER NOTES</h2>
+        <div class="section">
+            <p style="color: #7f8c8d; margin-bottom: 10px; font-style: italic;">Anything else important not captured above</p>
+            <div class="notes-field">
+                <textarea id="engineer-notes" name="engineer-notes" style="min-height: 120px;"></textarea>
+            </div>
+        </div>
+
+        <!-- Footer Information -->
+        <div class="footer-info">
+            <div class="header-field">
+                <label for="completed-by">Completed by:</label>
+                <input type="text" id="completed-by" name="completed-by">
+            </div>
+            <div class="header-field">
+                <label for="date-completed">Date:</label>
+                <input type="date" id="date-completed" name="date-completed">
+            </div>
+            <div class="header-field">
+                <label for="next-checkin">Next check-in scheduled:</label>
+                <input type="date" id="next-checkin" name="next-checkin">
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <button class="btn btn-primary" onclick="window.print()">🖨️ Print Checklist</button>
+            <button class="btn btn-success" onclick="saveAsHTML()">💾 Save as HTML</button>
+            <button class="btn btn-secondary" onclick="clearForm()">🔄 Clear Form</button>
+        </div>
+    </div>
+
+    <script>
+        // Set today's date in the week ending field
+        document.addEventListener('DOMContentLoaded', function() {
+            const today = new Date();
+            const weekEndingField = document.getElementById('weekEnding');
+            const dateCompletedField = document.getElementById('date-completed');
+
+            // Format date as YYYY-MM-DD
+            const formattedDate = today.toISOString().split('T')[0];
+            weekEndingField.value = formattedDate;
+            dateCompletedField.value = formattedDate;
+        });
+
+        function clearForm() {
+            if (confirm('Are you sure you want to clear all form data?')) {
+                document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+                document.querySelectorAll('input[type="radio"]').forEach(rb => rb.checked = false);
+                document.querySelectorAll('input[type="text"]').forEach(input => input.value = '');
+                document.querySelectorAll('textarea').forEach(textarea => textarea.value = '');
+
+                // Reset dates to today
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('weekEnding').value = today;
+                document.getElementById('date-completed').value = today;
+            }
+        }
+
+        function saveAsHTML() {
+            const htmlContent = document.documentElement.outerHTML;
+            const blob = new Blob([htmlContent], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+
+            const projectName = document.getElementById('project').value || 'checklist';
+            const weekEnding = document.getElementById('weekEnding').value || new Date().toISOString().split('T')[0];
+
+            a.href = url;
+            a.download = `${projectName.replace(/\s+/g, '_')}_${weekEnding}_checklist.html`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>

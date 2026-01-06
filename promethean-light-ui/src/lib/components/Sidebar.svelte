@@ -1,7 +1,7 @@
 <script>
   import { activeSection, favorites, stats, tags, clusters, daemonConnected, databaseInfo, apiKeysStatus, chatMessages, savedFolders } from '../stores.js';
   import { removeFavorite, searchQuery, searchResults, loadSavedFolders, saveToFolder, createFolder, removeFromFolder } from '../stores.js';
-  import { getStats, getTags, checkDaemon, startDaemon, getDatabaseInfo, getApiKeysStatus, getClusters, rebuildClusters } from '../api.js';
+  import { getStats, getTags, checkDaemon, startDaemon, getDatabaseInfo, getApiKeysStatus, getClusters, rebuildClusters, syncEmails } from '../api.js';
   import { onMount } from 'svelte';
   import UnlockModal from './UnlockModal.svelte';
   import AddNoteModal from './AddNoteModal.svelte';
@@ -244,6 +244,8 @@
   let showAddNoteModal = false;
   let showFileUploadModal = false;
   let isRebuildingClusters = false;
+  let isSyncingEmails = false;
+  let lastSyncCheck = null; // { time: Date, success: boolean, message: string }
 
   async function handleRebuildClusters() {
     isRebuildingClusters = true;
@@ -262,6 +264,42 @@
       console.error('Failed to rebuild clusters:', e);
     } finally {
       isRebuildingClusters = false;
+    }
+  }
+
+  async function handleSyncEmails() {
+    isSyncingEmails = true;
+    try {
+      debugLog('EMAIL', 'Syncing emails...');
+      const result = await syncEmails();
+      debugLog('EMAIL', 'Sync result:', result);
+
+      // Check if watcher actually ran successfully
+      const watcherResult = result.results?.[0];
+      const actuallyWorked = watcherResult?.status === 'ok';
+      const emailsTracked = watcherResult?.emails_tracked || 0;
+
+      // Track sync status with actual result
+      lastSyncCheck = {
+        time: new Date(),
+        success: actuallyWorked,
+        message: actuallyWorked
+          ? (emailsTracked > 0 ? `+${emailsTracked} new` : 'No new emails')
+          : (watcherResult?.message || 'Sync failed')
+      };
+
+      // Refresh stats to update last_email_at
+      await refreshStats();
+    } catch (e) {
+      debugLog('EMAIL', `Sync failed: ${e.message}`);
+      console.error('Failed to sync emails:', e);
+      lastSyncCheck = {
+        time: new Date(),
+        success: false,
+        message: e.message || 'Connection failed'
+      };
+    } finally {
+      isSyncingEmails = false;
     }
   }
 
@@ -619,29 +657,70 @@
       </button>
       {#if expandedSections.sources}
         <div class="section-content sources">
-          <button
-            class="source-item clickable"
-            on:click={() => exploreDataSource('emails')}
-            disabled={!$daemonConnected || ($stats.sources?.emails || 0) === 0}
-            title="Click for email summary"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2">
-              <rect x="2" y="4" width="20" height="16" rx="2"/>
-              <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
-            </svg>
-            <span>Outlook Emails</span>
-            <span class="source-count">{$stats.sources?.emails || 0}</span>
-            <svg class="explore-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="m9 18 6-6-6-6"/>
-            </svg>
-          </button>
+          <div class="source-row">
+            <button
+              class="source-item clickable"
+              on:click={() => exploreDataSource('emails')}
+              disabled={!$daemonConnected || ($stats.sources?.emails || 0) === 0}
+              title="Click for email summary"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2">
+                <rect x="2" y="4" width="20" height="16" rx="2"/>
+                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+              </svg>
+              <span>Outlook Emails</span>
+              <span class="source-count">{$stats.sources?.emails || 0}</span>
+              <svg class="explore-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="m9 18 6-6-6-6"/>
+              </svg>
+            </button>
+            <button
+              class="sync-btn"
+              on:click={handleSyncEmails}
+              disabled={!$daemonConnected || isSyncingEmails}
+              title="Sync emails now"
+            >
+              {#if isSyncingEmails}
+                <span class="spinner"></span>
+              {:else}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                </svg>
+              {/if}
+            </button>
+          </div>
           {#if $stats.last_email_at}
             <div class="last-sync-info" title="Last email ingested: {$stats.last_email_at}">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"/>
-                <polyline points="12 6 12 12 16 14"/>
+                <rect x="2" y="4" width="20" height="16" rx="2"/>
+                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
               </svg>
-              <span>Last: {formatRelativeTime($stats.last_email_at)}</span>
+              <span>Last email: <strong>{formatRelativeTime($stats.last_email_at)}</strong></span>
+            </div>
+          {:else}
+            <div class="last-sync-info no-sync" title="No emails synced yet">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <span>No emails yet</span>
+            </div>
+          {/if}
+          {#if lastSyncCheck}
+            <div class="last-sync-info" class:sync-success={lastSyncCheck.success} class:sync-error={!lastSyncCheck.success} title={`Synced ${formatRelativeTime(lastSyncCheck.time.toISOString())}`}>
+              {#if lastSyncCheck.success}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 6L9 17l-5-5"/>
+                </svg>
+              {:else}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="15" y1="9" x2="9" y2="15"/>
+                  <line x1="9" y1="9" x2="15" y2="15"/>
+                </svg>
+              {/if}
+              <span><strong>{lastSyncCheck.message}</strong></span>
             </div>
           {/if}
           <button
@@ -1305,6 +1384,41 @@
     color: var(--text-muted);
   }
 
+  .source-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .source-row .source-item {
+    flex: 1;
+  }
+
+  .sync-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 8px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+
+  .sync-btn:hover:not(:disabled) {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue);
+    color: white;
+  }
+
+  .sync-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
   .last-sync-info {
     display: flex;
     align-items: center;
@@ -1320,6 +1434,42 @@
 
   .last-sync-info span {
     opacity: 0.8;
+  }
+
+  .last-sync-info strong {
+    color: var(--accent-blue);
+  }
+
+  .last-sync-info.no-sync {
+    color: var(--accent-orange);
+  }
+
+  .last-sync-info.no-sync svg {
+    stroke: var(--accent-orange);
+  }
+
+  .last-sync-info.sync-success {
+    color: var(--accent-green);
+  }
+
+  .last-sync-info.sync-success svg {
+    stroke: var(--accent-green);
+  }
+
+  .last-sync-info.sync-success strong {
+    color: var(--accent-green);
+  }
+
+  .last-sync-info.sync-error {
+    color: var(--accent-red);
+  }
+
+  .last-sync-info.sync-error svg {
+    stroke: var(--accent-red);
+  }
+
+  .last-sync-info.sync-error strong {
+    color: var(--accent-red);
   }
 
   .last-sync-banner {

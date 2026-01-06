@@ -18,7 +18,9 @@ class SimpleCache:
         """Get cached value if not expired (LRU: move to end)"""
         if key in self.cache:
             entry = self.cache[key]
-            if time.time() - entry['timestamp'] < self.ttl:
+            # Use per-item TTL if set, otherwise default TTL
+            item_ttl = entry.get('ttl', self.ttl)
+            if time.time() - entry['timestamp'] < item_ttl:
                 # Move to end (most recently used)
                 self.cache.move_to_end(key)
                 return entry['value']
@@ -27,8 +29,8 @@ class SimpleCache:
                 del self.cache[key]
         return None
 
-    def set(self, key: str, value: Any) -> None:
-        """Set cache value with LRU eviction"""
+    def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
+        """Set cache value with LRU eviction and optional per-item TTL"""
         # Remove if exists (to update position)
         if key in self.cache:
             del self.cache[key]
@@ -36,7 +38,8 @@ class SimpleCache:
         # Add new entry
         self.cache[key] = {
             'value': value,
-            'timestamp': time.time()
+            'timestamp': time.time(),
+            'ttl': ttl if ttl is not None else self.ttl
         }
 
         # Evict oldest if over max size (FIFO/LRU)

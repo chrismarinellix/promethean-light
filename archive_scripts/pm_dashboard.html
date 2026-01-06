@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PM Burn Rate Dashboard - Nov 16-23, 2025</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .dashboard {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            color: #1a202c;
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .header .subtitle {
+            color: #718096;
+            font-size: 16px;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .metric-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .metric-card .label {
+            color: #718096;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .metric-card .value {
+            color: #1a202c;
+            font-size: 32px;
+            font-weight: bold;
+        }
+
+        .metric-card .subvalue {
+            color: #4299e1;
+            font-size: 14px;
+            margin-top: 4px;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .chart-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .chart-card h2 {
+            color: #1a202c;
+            font-size: 20px;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: #f7fafc;
+            padding: 12px;
+            text-align: left;
+            color: #4a5568;
+            font-weight: 600;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #e2e8f0;
+            color: #2d3748;
+        }
+
+        tr:hover {
+            background: #f7fafc;
+        }
+
+        .priority-high {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .priority-medium {
+            background: #feebc8;
+            color: #c05621;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .priority-low {
+            background: #c6f6d5;
+            color: #22543d;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .recommendations {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-top: 20px;
+        }
+
+        .recommendations h2 {
+            color: #1a202c;
+            font-size: 24px;
+            margin-bottom: 16px;
+        }
+
+        .recommendation-item {
+            background: #f7fafc;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            border-left: 4px solid #4299e1;
+        }
+
+        .recommendation-item h3 {
+            color: #2d3748;
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+
+        .recommendation-item p {
+            color: #4a5568;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // Dashboard Data (from PM analysis Nov 16-23, 2025)
+        const dashboardData = {
+            summary: {
+                totalHours: 428.19,
+                billableHours: 428.19,
+                utilization: 100.0,
+                totalRevenue: 126315.60,
+                numProjects: 29,
+                avgDailyHours: 61.17,
+                dateRange: "Nov 16 - Nov 23, 2025"
+            },
+            projects: [
+                { project: "GRD0500087", description: "Haughton BESS Grid Connection", totalHours: 43.75, dailyHours: 6.25, totalRevenue: 13343.75, dailyRevenue: 1906.25 },
+                { project: "GRD0500078", description: "Upper Calliope Solar Farm", totalHours: 37.15, dailyHours: 5.31, totalRevenue: 10664.25, dailyRevenue: 1523.46 },
+                { project: "GRD0500090", description: "Gerogery Solar Farm & BESS", totalHours: 36.10, dailyHours: 5.16, totalRevenue: 11010.50, dailyRevenue: 1572.93 },
+                { project: "GRD0500089", description: "Yanco Delta Wind Farm", totalHours: 35.00, dailyHours: 5.00, totalRevenue: 10675.00, dailyRevenue: 1525.00 },
+                { project: "GRD0500079", description: "Sandy Creek Solar Farm & BESS", totalHours: 33.60, dailyHours: 4.80, totalRevenue: 9912.00, dailyRevenue: 1416.00 },
+                { project: "GRD0500082", description: "Templers West BESS", totalHours: 32.04, dailyHours: 4.58, totalRevenue: 9772.20, dailyRevenue: 1396.03 },
+                { project: "GRD0500066", description: "Blacktop-BESS OFFICER", totalHours: 25.95, dailyHours: 3.71, totalRevenue: 7655.25, dailyRevenue: 1093.61 },
+                { project: "GRD0500026", description: "Armidale BESS Connection", totalHours: 23.55, dailyHours: 3.36, totalRevenue: 5147.75, dailyRevenue: 735.39 },
+                { project: "GRD0500080", description: "Wellington North Solar Farm", totalHours: 23.35, dailyHours: 3.34, totalRevenue: 6888.25, dailyRevenue: 984.04 },
+                { project: "GRD0500096", description: "Boulder Creek Wind Farm", totalHours: 20.25, dailyHours: 2.89, totalRevenue: 6176.25, dailyRevenue: 882.32 },
+                { project: "GRD0500061", description: "Birdwood Energy Reserve", totalHours: 17.45, dailyHours: 2.49, totalRevenue: 5147.75, dailyRevenue: 735.39 },
+                { project: "GRD0500043", description: "Corop SF & BESS Connection Study", totalHours: 79.2, dailyHours: 11.31, totalRevenue: 23457.00, dailyRevenue: 3351.00 },
+                { project: "GRD0500100", description: "Clements Gap BESS R1 Due Diligence", totalHours: 59.0, dailyHours: 8.43, totalRevenue: 9813.00, dailyRevenue: 1402.00 },
+                { project: "GRD0500104", description: "Markaranka BESS", totalHours: 50.4, dailyHours: 7.20, totalRevenue: 13356.00, dailyRevenue: 1908.00 },
+                { project: "GRD0500061", description: "Birdwood Energy Reserve", totalHours: 46.5, dailyHours: 6.64, totalRevenue: 14018.00, dailyRevenue: 2002.57 }
+            ],
+            billing: [
+                { type: "Hourly Rate", hours: 418.19, percentage: 97.7 },
+                { type: "Fixed Price", hours: 3.00, percentage: 0.7 },
+                { type: "Reimbursable Expenses", hours: 7.00, percentage: 1.6 }
+            ],
+            activities: [
+                { activity: "Project Management", hours: 250.5, revenue: 72345.00 },
+                { activity: "Technical Support", hours: 86.09, revenue: 22798.20 },
+                { activity: "Reporting", hours: 45.3, revenue: 15234.50 },
+                { activity: "Client Meetings", hours: 32.1, revenue: 11456.00 },
+                { activity: "Commissioning Support", hours: 12.7, revenue: 3746.50 }
+            ],
+            daily: [
+                { Date: "2025-11-17", "Total Hours": 61.2, "Billable Hours": 61.2, Utilization: 100.0 },
+                { Date: "2025-11-18", "Total Hours": 59.8, "Billable Hours": 59.8, Utilization: 100.0 },
+                { Date: "2025-11-19", "Total Hours": 65.4, "Billable Hours": 65.4, Utilization: 100.0 },
+                { Date: "2025-11-20", "Total Hours": 62.3, "Billable Hours": 62.3, Utilization: 100.0 },
+                { Date: "2025-11-21", "Total Hours": 58.9, "Billable Hours": 58.9, Utilization: 100.0 }
+            ]
+        };
+
+        const Dashboard = () => {
+            const chartRefs = {
+                burnRate: React.useRef(null),
+                billing: React.useRef(null),
+                daily: React.useRef(null)
+            };
+
+            React.useEffect(() => {
+                // Burn Rate Chart
+                const burnRateCtx = document.getElementById('burnRateChart').getContext('2d');
+                const burnRateChart = new Chart(burnRateCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: dashboardData.projects.slice(0, 10).map(p => p.project),
+                        datasets: [{
+                            label: 'Daily Revenue ($)',
+                            data: dashboardData.projects.slice(0, 10).map(p => p.dailyRevenue),
+                            backgroundColor: 'rgba(54, 162, 235, 0.8)',
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: (context) => `$${context.parsed.y.toFixed(2)}/day`
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: (value) => `$${value}`
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Billing Type Chart
+                const billingCtx = document.getElementById('billingChart').getContext('2d');
+                const billingChart = new Chart(billingCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: dashboardData.billing.map(b => b.type),
+                        datasets: [{
+                            data: dashboardData.billing.map(b => b.hours),
+                            backgroundColor: [
+                                'rgba(255, 99, 132, 0.8)',
+                                'rgba(54, 162, 235, 0.8)',
+                                'rgba(255, 206, 86, 0.8)',
+                                'rgba(75, 192, 192, 0.8)'
+                            ],
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom' },
+                            tooltip: {
+                                callbacks: {
+                                    label: (context) => {
+                                        const label = context.label || '';
+                                        const value = context.parsed;
+                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        const percentage = ((value / total) * 100).toFixed(1);
+                                        return `${label}: ${value}h (${percentage}%)`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Daily Utilization Chart
+                const dailyCtx = document.getElementById('dailyChart').getContext('2d');
+                const dailyChart = new Chart(dailyCtx, {
+                    type: 'line',
+                    data: {
+                        labels: dashboardData.daily.map(d => new Date(d.Date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })),
+                        datasets: [{
+                            label: 'Total Hours',
+                            data: dashboardData.daily.map(d => d['Total Hours']),
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                            borderWidth: 3,
+                            tension: 0.4,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: true }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: (value) => `${value}h`
+                                }
+                            }
+                        }
+                    }
+                });
+
+                return () => {
+                    burnRateChart.destroy();
+                    billingChart.destroy();
+                    dailyChart.destroy();
+                };
+            }, []);
+
+            const getPriority = (dailyRevenue) => {
+                if (dailyRevenue >= 1500) return 'HIGH';
+                if (dailyRevenue >= 1000) return 'MEDIUM';
+                return 'LOW';
+            };
+
+            const getPriorityClass = (priority) => {
+                if (priority === 'HIGH') return 'priority-high';
+                if (priority === 'MEDIUM') return 'priority-medium';
+                return 'priority-low';
+            };
+
+            return (
+                <div className="dashboard">
+                    <div className="header">
+                        <h1>Project Manager Burn Rate Dashboard</h1>
+                        <p className="subtitle">{dashboardData.summary.dateRange} • Focus Areas & Resource Allocation</p>
+                    </div>
+
+                    <div className="metrics-grid">
+                        <div className="metric-card">
+                            <div className="label">Total Hours</div>
+                            <div className="value">{dashboardData.summary.totalHours.toFixed(0)}</div>
+                            <div className="subvalue">{dashboardData.summary.avgDailyHours.toFixed(1)} hrs/day avg</div>
+                        </div>
+                        <div className="metric-card">
+                            <div className="label">Billable Hours</div>
+                            <div className="value">{dashboardData.summary.billableHours.toFixed(0)}</div>
+                            <div className="subvalue">{dashboardData.summary.utilization.toFixed(1)}% utilization</div>
+                        </div>
+                        <div className="metric-card">
+                            <div className="label">Total Revenue</div>
+                            <div className="value">${(dashboardData.summary.totalRevenue / 1000).toFixed(0)}k</div>
+                            <div className="subvalue">${(dashboardData.summary.totalRevenue / 7 / 1000).toFixed(1)}k/day avg</div>
+                        </div>
+                        <div className="metric-card">
+                            <div className="label">Active Projects</div>
+                            <div className="value">{dashboardData.summary.numProjects}</div>
+                            <div className="subvalue">Portfolio managed</div>
+                        </div>
+                    </div>
+
+                    <div className="charts-grid">
+                        <div className="chart-card">
+                            <h2>Top 10 Projects by Daily Burn Rate</h2>
+                            <div style={{height: '400px'}}>
+                                <canvas id="burnRateChart"></canvas>
+                            </div>
+                        </div>
+                        <div className="chart-card">
+                            <h2>Billing Type Distribution</h2>
+                            <div style={{height: '400px'}}>
+                                <canvas id="billingChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="chart-card">
+                        <h2>Daily Hours Trend</h2>
+                        <div style={{height: '300px'}}>
+                            <canvas id="dailyChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div className="table-container">
+                        <h2 style={{marginBottom: '20px'}}>Project Priority Matrix - Where to Focus Efforts</h2>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Priority</th>
+                                    <th>Project Code</th>
+                                    <th>Description</th>
+                                    <th>Total Hours</th>
+                                    <th>Daily Hours</th>
+                                    <th>Daily Revenue</th>
+                                    <th>Total Revenue</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {dashboardData.projects.slice(0, 15).map((project, idx) => {
+                                    const priority = getPriority(project.dailyRevenue);
+                                    return (
+                                        <tr key={idx}>
+                                            <td><span className={getPriorityClass(priority)}>{priority}</span></td>
+                                            <td><strong>{project.project}</strong></td>
+                                            <td>{project.description}</td>
+                                            <td>{project.totalHours.toFixed(1)}h</td>
+                                            <td>{project.dailyHours.toFixed(1)}h/day</td>
+                                            <td><strong>${project.dailyRevenue.toFixed(2)}/day</strong></td>
+                                            <td>${project.totalRevenue.toLocaleString()}</td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="recommendations">
+                        <h2>Key Focus Areas & Recommendations</h2>
+
+                        <div className="recommendation-item">
+                            <h3>1. High-Priority Projects (Daily Revenue &gt; $1,500/day)</h3>
+                            <p>
+                                <strong>Action:</strong> Prioritize resources for Haughton BESS, Upper Calliope, Gerogery, Yanco Delta, and Sandy Creek projects.
+                                These are generating the highest daily revenue and should receive priority attention for timely delivery.
+                            </p>
+                        </div>
+
+                        <div className="recommendation-item">
+                            <h3>2. T&E Billing Dominance (97.7%)</h3>
+                            <p>
+                                <strong>Action:</strong> With almost all work on T&E basis, ensure rigorous time tracking and variation order management.
+                                All scope changes should be captured and billed appropriately to maintain profitability.
+                            </p>
+                        </div>
+
+                        <div className="recommendation-item">
+                            <h3>3. Portfolio Optimization</h3>
+                            <p>
+                                <strong>Action:</strong> Managing 29 concurrent projects is resource-intensive. Consider:
+                                <br/>• Delegating lower-revenue projects (&lt;$1,000/day) to junior PMs
+                                <br/>• Focusing senior PM time on high-value projects (&gt;$1,500/day)
+                                <br/>• Standardizing reporting processes to reduce administrative overhead
+                            </p>
+                        </div>
+
+                        <div className="recommendation-item">
+                            <h3>4. Renewable Energy Focus</h3>
+                            <p>
+                                <strong>Action:</strong> The portfolio is heavily weighted toward BESS and Solar projects.
+                                Ensure team has up-to-date knowledge on latest grid connection requirements and commissioning standards for these technologies.
+                            </p>
+                        </div>
+
+                        <div className="recommendation-item">
+                            <h3>5. Weekly Reporting & Variation Management</h3>
+                            <p>
+                                <strong>Action:</strong> Significant time spent on reporting and variations. Consider:
+                                <br/>• Implementing automated reporting templates
+                                <br/>• Streamlining variation approval processes
+                                <br/>• Using project management software to reduce manual tracking
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<Dashboard />, document.getElementById('root'));
+    </script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+Lester - ABB Call Notes (December 2024)
+
+Topic: 3 x Generator Units - Document Settings
+
+- ABB require documentation covering settings for all 3 generator units
+- Ajith previously worked on this
+- Document requires editorial work
+- Need to confirm: Have any further changes been made from ABB's end?
+- Timeline: Not specified when they need it complete
+- Note: This has been outstanding for a while now - cannot expect immediate turnaround
+- Action required: Will need to raise a PO before proceeding

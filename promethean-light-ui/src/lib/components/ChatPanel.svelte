@@ -1,5 +1,5 @@
 <script>
-  import { chatMessages, saveFavorite, savedFolders, saveToFolder, loadSavedFolders, viewMode, daemonConnected } from '../stores.js';
+  import { chatMessages, saveFavorite, savedFolders, saveToFolder, loadSavedFolders, viewMode, daemonConnected, chatSessions, loadChatSessions, startNewSession, loadSession, saveCurrentSession, deleteSession, recentSearches, loadRecentSearches, addRecentSearch } from '../stores.js';
   import { chat as apiChat } from '../api.js';
   import { onMount, onDestroy } from 'svelte';
   import { marked } from 'marked';
@@ -25,6 +25,10 @@
 
   let inputValue = '';
   let isLoading = false;
+  let loadingStartTime = 0;
+  let loadingElapsed = 0;
+  let loadingTimer = null;
+  let lastFailedQuery = null;
   let savingId = null;
   let savedId = null;
   let copiedId = null;
@@ -44,14 +48,19 @@
   let voiceSupported = false;
   let interimTranscript = '';
 
-  // Animated spinner
-  const spinnerFrames = ['/', '—', '\\', '|'];
-  let spinnerIndex = 0;
-  let spinnerChar = spinnerFrames[0];
+  // Animated loading dots
+  const loadingDots = ['', '.', '..', '...', '....'];
+  let dotsIndex = 0;
+  let loadingDotsText = '';
   let spinnerInterval = null;
+
+  // History dropdown state
+  let showHistoryDropdown = false;
 
   onMount(() => {
     loadSavedFolders();
+    loadChatSessions();
+    loadRecentSearches();
     initSpeechRecognition();
   });
 
@@ -141,20 +150,20 @@
     }
   }
 
-  // Start/stop spinner animation based on loading state
+  // Start/stop loading dots animation based on loading state
   $: if (isLoading) {
     if (!spinnerInterval) {
       spinnerInterval = setInterval(() => {
-        spinnerIndex = (spinnerIndex + 1) % spinnerFrames.length;
-        spinnerChar = spinnerFrames[spinnerIndex];
-      }, 100);
+        dotsIndex = (dotsIndex + 1) % loadingDots.length;
+        loadingDotsText = loadingDots[dotsIndex];
+      }, 400);
     }
   } else {
     if (spinnerInterval) {
       clearInterval(spinnerInterval);
       spinnerInterval = null;
-      spinnerIndex = 0;
-      spinnerChar = spinnerFrames[0];
+      dotsIndex = 0;
+      loadingDotsText = '';
     }
   }
 
@@ -164,6 +173,7 @@
       viewMode.set('response');
     } else {
       expandedViewIndex = idx;
+      viewMode.set('warroom');  // Default to warroom view when opening
     }
   }
 
@@ -184,36 +194,58 @@
     }
   }
 
-  async function sendMessage() {
-    if (!inputValue.trim() || isLoading) return;
+  function startLoadingTimer() {
+    loadingStartTime = performance.now();
+    loadingElapsed = 0;
+    loadingTimer = setInterval(() => {
+      loadingElapsed = Math.round((performance.now() - loadingStartTime) / 1000);
+    }, 1000);
+  }
 
-    const userMessage = inputValue;
-    inputValue = '';
+  function stopLoadingTimer() {
+    if (loadingTimer) {
+      clearInterval(loadingTimer);
+      loadingTimer = null;
+    }
+  }
 
-    debugLog('SEND', `Sending message: "${userMessage.substring(0, 50)}..."`);
+  async function sendMessage(retryQuery = null) {
+    const messageToSend = retryQuery || inputValue.trim();
+    if (!messageToSend || isLoading) return;
+
+    if (!retryQuery) {
+      inputValue = '';
+    }
+
+    debugLog('SEND', `Sending message: "${messageToSend.substring(0, 50)}..."`);
 
     // Check if daemon is connected first
     if (!$daemonConnected) {
       debugLog('SEND', 'WARNING: Daemon not marked as connected, attempting anyway...');
     }
 
-    // Add user message
-    chatMessages.update(msgs => [...msgs, {
-      role: 'user',
-      content: userMessage,
-      timestamp: new Date().toISOString()
-    }]);
+    // Add user message only if not a retry
+    if (!retryQuery) {
+      chatMessages.update(msgs => [...msgs, {
+        role: 'user',
+        content: messageToSend,
+        timestamp: new Date().toISOString()
+      }]);
+      // Add to recent searches
+      addRecentSearch(messageToSend);
+    }
 
     isLoading = true;
-    const startTime = performance.now();
+    lastFailedQuery = null;
+    startLoadingTimer();
 
     try {
       debugLog('API', 'Calling chat API...');
 
       // Use the API helper which handles both Tauri and browser contexts
-      const data = await apiChat(userMessage);
+      const data = await apiChat(messageToSend);
 
-      const elapsed = Math.round(performance.now() - startTime);
+      const elapsed = Math.round(performance.now() - loadingStartTime);
       debugLog('API', `Response received in ${elapsed}ms`, {
         responseLength: data.response?.length || 0,
         sources: data.sources?.length || 0
@@ -223,8 +255,13 @@
         role: 'assistant',
         content: data.response || data.message || 'No response received from API',
         sources: data.sources || [],
+        chunks: data.chunks_retrieved || 0,
+        elapsed: elapsed,
         timestamp: new Date().toISOString()
       }]);
+
+      // Auto-save session after response
+      setTimeout(() => saveCurrentSession(), 500);
 
       // Auto-expand War Room view for the new response
       const newMsgIndex = $chatMessages.length; // This will be the index after update
@@ -233,32 +270,54 @@
         viewMode.set('warroom');
       }, 100);
     } catch (e) {
-      const elapsed = Math.round(performance.now() - startTime);
+      const elapsed = Math.round(performance.now() - loadingStartTime);
       debugLog('ERROR', `Chat failed after ${elapsed}ms: ${e.message}`, { error: e });
 
+      lastFailedQuery = messageToSend;
+
       let errorMessage = 'Error: Could not connect to Promethean Light daemon.';
+      let errorType = 'connection';
 
       // Provide more specific error messages
       if (e.message.includes('Failed to fetch') || e.message.includes('Cannot connect')) {
-        errorMessage = 'Error: Cannot connect to Promethean Light daemon. Please ensure:\n' +
-          '1. The daemon is running (check the terminal window)\n' +
-          '2. Click the Refresh button in the sidebar\n' +
-          '3. If the daemon crashed, restart it with START_PL2000.bat';
+        errorType = 'connection';
+        errorMessage = '**Connection Error**\n\nCannot connect to Promethean Light daemon.\n\n' +
+          '• Check the daemon terminal window is running\n' +
+          '• Click Refresh in the sidebar\n' +
+          '• Restart with DEV.bat if needed';
+      } else if (e.message.includes('timed out')) {
+        errorType = 'timeout';
+        errorMessage = `**Request Timed Out** (${Math.round(elapsed / 1000)}s)\n\n` +
+          'The query took too long to process.\n\n' +
+          '• Try a simpler query\n' +
+          '• The daemon may be processing other requests\n' +
+          '• Click "Retry" to try again';
       } else if (e.message.includes('API error')) {
-        errorMessage = `Error: ${e.message}`;
-      } else if (e.message.includes('timeout')) {
-        errorMessage = 'Error: Request timed out. The query may be too complex or the daemon is overloaded.';
+        errorType = 'api';
+        errorMessage = `**API Error**\n\n${e.message}`;
+      } else {
+        errorMessage = `**Error**\n\n${e.message}`;
       }
 
       chatMessages.update(msgs => [...msgs, {
         role: 'assistant',
         content: errorMessage,
         isError: true,
+        errorType: errorType,
+        canRetry: errorType === 'timeout' || errorType === 'connection',
+        failedQuery: messageToSend,
         timestamp: new Date().toISOString()
       }]);
     } finally {
       isLoading = false;
+      stopLoadingTimer();
     }
+  }
+
+  function retryLastQuery(query) {
+    // Remove the last error message
+    chatMessages.update(msgs => msgs.slice(0, -1));
+    sendMessage(query);
   }
 
   function handleKeydown(e) {
@@ -331,6 +390,44 @@ Saved: ${new Date().toLocaleString()}`;
 
   function clearHistory() {
     chatMessages.set([]);
+  }
+
+  function handleNewQuery() {
+    startNewSession();
+    showHistoryDropdown = false;
+  }
+
+  function handleSelectSession(sessionId) {
+    // Save current first
+    if ($chatMessages.length > 0) {
+      saveCurrentSession();
+    }
+    loadSession(sessionId);
+    showHistoryDropdown = false;
+  }
+
+  function handleDeleteSession(e, sessionId) {
+    e.stopPropagation();
+    deleteSession(sessionId);
+  }
+
+  function toggleHistoryDropdown() {
+    showHistoryDropdown = !showHistoryDropdown;
+  }
+
+  function formatSessionTime(timestamp) {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now - date;
+    const mins = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 7) return `${days}d ago`;
+    return date.toLocaleDateString();
   }
 
   // Ask a question immediately (for lozenge clicks)
@@ -416,23 +513,9 @@ Saved: ${new Date().toLocaleString()}`;
 </script>
 
 <div class="terminal">
-  <div class="terminal-header">
-    <div class="terminal-title">
-      <span class="prompt-symbol">></span>
-      <span>Ask your data anything</span>
-    </div>
-    {#if $chatMessages.length > 0}
-      <button class="clear-btn" on:click={clearHistory} title="Clear history">
-        Clear
-      </button>
-    {/if}
-  </div>
-
   <div class="terminal-output">
     {#if $chatMessages.length === 0}
       <div class="welcome">
-        <p class="welcome-title">What would you like to know?</p>
-
         <!-- Centered search lozenge -->
         <div class="center-search-container">
           <div class="center-search-lozenge">
@@ -483,12 +566,12 @@ Saved: ${new Date().toLocaleString()}`;
             {/if}
             <button
               class="center-send-btn"
-              on:click={sendMessage}
+              on:click={() => sendMessage()}
               disabled={isLoading || isListening || !inputValue.trim()}
               title="Send message"
             >
               {#if isLoading}
-                <span class="btn-spinner">{spinnerChar}</span>
+                <span class="btn-spinner"></span>
               {:else}
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <line x1="22" y1="2" x2="11" y2="13"/>
@@ -497,116 +580,24 @@ Saved: ${new Date().toLocaleString()}`;
               {/if}
             </button>
           </div>
-          <p class="search-hint">Press Enter to search, or click a suggestion below</p>
         </div>
 
-        <div class="query-section">
-          <span class="section-label">Team & People</span>
-          <div class="lozenges">
-            <button class="lozenge people" on:click={() => askQuestion('List all team members with their roles')}>
-              Team members
-            </button>
-            <button class="lozenge people" on:click={() => askQuestion('Show team salary summary by region')}>
-              Salary by region
-            </button>
-            <button class="lozenge people" on:click={() => askQuestion('Who has retention bonuses and when do they expire?')}>
-              Retention bonuses
-            </button>
-            <button class="lozenge people" on:click={() => askQuestion('Show India team details with salary bands')}>
-              India team
-            </button>
-            <button class="lozenge people" on:click={() => askQuestion('Show Australia team salaries')}>
-              Australia team
-            </button>
+        <!-- Recent searches as lozenges -->
+        {#if $recentSearches.length > 0}
+          <div class="recent-searches">
+            {#each $recentSearches as search}
+              <button
+                class="recent-lozenge"
+                on:click={() => askQuestion(search)}
+                title={search}
+              >
+                {search.length > 40 ? search.substring(0, 40) + '...' : search}
+              </button>
+            {/each}
           </div>
-        </div>
-
-        <div class="query-section">
-          <span class="section-label">Projects & Pipeline</span>
-          <div class="lozenges">
-            <button class="lozenge projects" on:click={() => askQuestion('What active projects are we working on?')}>
-              Active projects
-            </button>
-            <button class="lozenge projects" on:click={() => askQuestion('Show project pipeline summary')}>
-              Pipeline summary
-            </button>
-            <button class="lozenge projects" on:click={() => askQuestion('What are the key project milestones coming up?')}>
-              Upcoming milestones
-            </button>
-            <button class="lozenge projects" on:click={() => askQuestion('Show Mt Challenger project details')}>
-              Mt Challenger
-            </button>
-          </div>
-        </div>
-
-        <div class="query-section">
-          <span class="section-label">Emails & Communications</span>
-          <div class="lozenges">
-            <button class="lozenge emails" on:click={() => askQuestion('Show recent important emails')}>
-              Recent emails
-            </button>
-            <button class="lozenge emails" on:click={() => askQuestion('What urgent items need my attention?')}>
-              Urgent items
-            </button>
-            <button class="lozenge emails" on:click={() => askQuestion('Show emails about budget discussions')}>
-              Budget emails
-            </button>
-            <button class="lozenge emails" on:click={() => askQuestion('What client communications happened this week?')}>
-              Client comms
-            </button>
-          </div>
-        </div>
-
-        <div class="query-section">
-          <span class="section-label">Analysis & Reports</span>
-          <div class="lozenges">
-            <button class="lozenge analysis" on:click={() => askQuestion('Show timesheet analysis summary')}>
-              Timesheet analysis
-            </button>
-            <button class="lozenge analysis" on:click={() => askQuestion('What are the key findings from recent reports?')}>
-              Report findings
-            </button>
-            <button class="lozenge analysis" on:click={() => askQuestion('Show PM burn rate analysis')}>
-              PM burn rates
-            </button>
-            <button class="lozenge analysis" on:click={() => askQuestion('Summarize Project Sentinel status')}>
-              Project Sentinel
-            </button>
-          </div>
-        </div>
-
-        <div class="query-section">
-          <span class="section-label">Quick Actions</span>
-          <div class="lozenges">
-            <button class="lozenge action" on:click={() => askQuestion('List all saved notes')}>
-              My notes
-            </button>
-            <button class="lozenge action" on:click={() => askQuestion('What documents were recently added?')}>
-              Recent docs
-            </button>
-            <button class="lozenge action" on:click={() => askQuestion('Search for salary review discussions')}>
-              Salary reviews
-            </button>
-          </div>
-        </div>
-
-        <div class="query-section">
-          <span class="section-label">Quick Reports</span>
-          <div class="lozenges">
-            <button class="lozenge report" on:click={() => askQuestion('Summarize all team pay by region in a table')}>
-              Team Pay Summary
-            </button>
-            <button class="lozenge report" on:click={() => askQuestion('List all retention bonuses with names, amounts, and expiry dates')}>
-              Retention Bonuses
-            </button>
-            <button class="lozenge report" on:click={() => askQuestion('Show Project Sentinel status and key milestones')}>
-              Project Sentinel
-            </button>
-            <button class="lozenge report" on:click={() => askQuestion('Which staff have had salary reviews and which are still pending?')}>
-              Salary Review Status
-            </button>
-          </div>
-        </div>
+        {:else}
+          <p class="search-hint">Your recent searches will appear here</p>
+        {/if}
       </div>
     {:else}
       {#each $chatMessages as msg, idx}
@@ -616,8 +607,19 @@ Saved: ${new Date().toLocaleString()}`;
               <span class="prompt">> </span>{msg.content}
             </div>
           {:else}
-            <div class="response">
+            <div class="response" class:error-response={msg.isError}>
               <div class="response-text">{@html renderMarkdown(msg.content)}</div>
+              {#if msg.isError && msg.canRetry}
+                <div class="error-actions">
+                  <button class="retry-btn" on:click={() => retryLastQuery(msg.failedQuery)}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M1 4v6h6M23 20v-6h-6"/>
+                      <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+                    </svg>
+                    Retry Query
+                  </button>
+                </div>
+              {/if}
               {#if !msg.isError}
                 <div class="response-actions">
                   <button
@@ -689,15 +691,57 @@ Saved: ${new Date().toLocaleString()}`;
                     />
                   </div>
                 {/if}
+                <!-- Follow-up search for this topic -->
+                <div class="followup-search">
+                  <svg class="followup-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"/>
+                    <path d="m21 21-4.35-4.35"/>
+                  </svg>
+                  <input
+                    type="text"
+                    class="followup-input"
+                    placeholder="Ask a follow-up question..."
+                    on:keydown={(e) => {
+                      if (e.key === 'Enter' && e.target.value.trim()) {
+                        askQuestion(e.target.value);
+                        e.target.value = '';
+                      }
+                    }}
+                    disabled={isLoading}
+                  />
+                  <button
+                    class="followup-btn"
+                    on:click={(e) => {
+                      const input = e.target.closest('.followup-search').querySelector('input');
+                      if (input.value.trim()) {
+                        askQuestion(input.value);
+                        input.value = '';
+                      }
+                    }}
+                    disabled={isLoading}
+                    title="Ask follow-up"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="22" y1="2" x2="11" y2="13"/>
+                      <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                    </svg>
+                  </button>
+                </div>
               {/if}
             </div>
           {/if}
         </div>
       {/each}
       {#if isLoading}
-        <div class="entry">
-          <div class="response loading">
-            <span class="spinner">{spinnerChar}</span>
+        <div class="loading-overlay">
+          <div class="loading-center">
+            <div class="loading-text-animated">Loading{loadingDotsText}</div>
+            {#if loadingElapsed > 0}
+              <div class="loading-timer">{loadingElapsed}s</div>
+            {/if}
+            {#if loadingElapsed > 10}
+              <div class="loading-hint">Complex queries may take up to 2 minutes</div>
+            {/if}
           </div>
         </div>
       {/if}
@@ -706,24 +750,45 @@ Saved: ${new Date().toLocaleString()}`;
 
   {#if $chatMessages.length > 0}
     <div class="terminal-input">
-      <span class="prompt">> </span>
-      {#if isListening}
-        <input
-          type="text"
-          value={interimTranscript || 'Listening...'}
-          placeholder="Listening..."
-          disabled={true}
-          class="listening-input"
-        />
-      {:else}
-        <input
-          type="text"
-          bind:value={inputValue}
-          on:keydown={handleKeydown}
-          placeholder="Ask a question..."
-          disabled={isLoading}
-        />
-      {/if}
+      <!-- New Query dropdown -->
+      <div class="new-query-dropdown">
+        <button class="new-query-btn" on:click={toggleHistoryDropdown} title="New query or load previous">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+          New
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="m6 9 6 6 6-6"/>
+          </svg>
+        </button>
+        {#if showHistoryDropdown}
+          <div class="history-dropdown">
+            <button class="history-item new" on:click={handleNewQuery}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
+              Start New Query
+            </button>
+            {#if $chatSessions.length > 0}
+              <div class="history-divider">Recent</div>
+              {#each $chatSessions as session}
+                <button class="history-item" on:click={() => handleSelectSession(session.id)}>
+                  <div class="history-item-content">
+                    <span class="history-title">{session.title}</span>
+                    <span class="history-time">{formatSessionTime(session.updatedAt)}</span>
+                  </div>
+                  <button class="history-delete" on:click={(e) => handleDeleteSession(e, session.id)} title="Delete">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M18 6L6 18M6 6l12 12"/>
+                    </svg>
+                  </button>
+                </button>
+              {/each}
+            {/if}
+          </div>
+        {/if}
+      </div>
+
       {#if voiceSupported}
         <button
           class="mic-btn"
@@ -746,15 +811,13 @@ Saved: ${new Date().toLocaleString()}`;
           {/if}
         </button>
       {/if}
-      <button
-        class="send-btn"
-        on:click={sendMessage}
-        disabled={isLoading || isListening || !inputValue.trim()}
-        title="Send message"
-      >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="22" y1="2" x2="11" y2="13"/>
-          <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+      {#if isListening}
+        <span class="listening-text">{interimTranscript || 'Listening...'}</span>
+      {/if}
+      <div class="spacer"></div>
+      <button class="clear-btn" on:click={clearHistory} title="Clear current">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
         </svg>
       </button>
     </div>
@@ -818,40 +881,23 @@ Saved: ${new Date().toLocaleString()}`;
     font-family: 'Segoe UI', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   }
 
-  .terminal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 16px;
-    background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border-color);
-  }
-
-  .terminal-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--text-secondary);
-    font-size: 13px;
-  }
-
-  .prompt-symbol {
-    color: var(--accent-orange);
-    font-weight: bold;
-  }
-
   .clear-btn {
-    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    margin-left: 8px;
+    background: var(--bg-tertiary);
     border: 1px solid var(--border-color);
+    border-radius: 8px;
     color: var(--text-muted);
-    padding: 4px 12px;
-    border-radius: 4px;
-    font-size: 11px;
     cursor: pointer;
-    font-family: inherit;
+    transition: all 0.2s;
   }
 
   .clear-btn:hover {
+    background: var(--bg-secondary);
     border-color: var(--accent-red);
     color: var(--accent-red);
   }
@@ -860,28 +906,24 @@ Saved: ${new Date().toLocaleString()}`;
     flex: 1;
     overflow-y: auto;
     padding: 16px;
+    position: relative;
   }
 
   .welcome {
-    padding: 20px 0;
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     text-align: center;
-  }
-
-  .welcome-title {
-    font-size: 28px;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin: 0 0 28px 0;
+    height: 100%;
+    padding: 40px 20px;
   }
 
   /* Center Search Lozenge Styles */
   .center-search-container {
     width: 100%;
     max-width: 650px;
-    margin-bottom: 32px;
+    margin-bottom: 40px;
   }
 
   .center-search-lozenge {
@@ -978,14 +1020,63 @@ Saved: ${new Date().toLocaleString()}`;
   }
 
   .btn-spinner {
-    font-weight: bold;
-    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    border: 2px solid transparent;
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
   }
 
   .search-hint {
-    margin-top: 10px;
-    font-size: 12px;
+    margin-top: 20px;
+    font-size: 13px;
     color: var(--text-muted);
+    opacity: 0.7;
+  }
+
+  /* Recent Searches Lozenges */
+  .recent-searches {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    max-width: 800px;
+    padding: 0 20px;
+  }
+
+  .recent-lozenge {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s;
+    max-width: 250px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .recent-lozenge:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--accent-orange);
+    color: var(--accent-orange);
+    transform: translateY(-1px);
+  }
+
+  .recent-lozenge:active {
+    transform: translateY(0);
   }
 
   .query-section {
@@ -1391,41 +1482,114 @@ Saved: ${new Date().toLocaleString()}`;
     overflow: auto;
   }
 
-  .loading {
-    padding: 16px;
-    color: var(--text-muted);
+  /* Centered Loading Overlay */
+  .loading-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(var(--bg-primary-rgb, 17, 17, 17), 0.85);
+    backdrop-filter: blur(4px);
+    z-index: 50;
   }
 
-  .spinner {
-    font-weight: bold;
+  .loading-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .loading-text-animated {
+    font-size: 28px;
+    font-weight: 600;
     color: var(--accent-orange);
-    font-size: 16px;
+    font-family: 'Segoe UI', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    min-width: 180px;
+    text-align: left;
+  }
+
+  .loading-timer {
+    font-size: 14px;
+    color: var(--text-muted);
+    background: var(--bg-tertiary);
+    padding: 4px 12px;
+    border-radius: 12px;
+  }
+
+  .loading-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-style: italic;
+    margin-top: 8px;
+  }
+
+  .error-response {
+    border-color: var(--accent-red) !important;
+    background: rgba(239, 68, 68, 0.05) !important;
+  }
+
+  .error-actions {
+    padding: 12px 16px;
+    background: var(--bg-tertiary);
+    border-top: 1px solid var(--border-color);
+  }
+
+  .retry-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--accent-orange);
+    border: none;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .retry-btn:hover {
+    background: #ea580c;
+    transform: translateY(-1px);
+  }
+
+  .retry-btn svg {
+    animation: none;
+  }
+
+  .retry-btn:hover svg {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
   }
 
   .terminal-input {
     display: flex;
     align-items: center;
-    padding: 16px;
+    gap: 12px;
+    padding: 12px 16px;
     background: var(--bg-secondary);
     border-top: 1px solid var(--border-color);
   }
 
-  .terminal-input input {
+  .listening-text {
     flex: 1;
-    background: transparent;
-    border: none;
-    color: var(--text-primary);
-    font-family: 'Segoe UI', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    font-size: 18px;
-    outline: none;
+    color: var(--accent-orange);
+    font-size: 14px;
+    font-style: italic;
+    animation: pulse-text 1.5s ease-in-out infinite;
   }
 
-  .terminal-input input::placeholder {
-    color: var(--text-muted);
-  }
-
-  .terminal-input input:disabled {
-    opacity: 0.5;
+  @keyframes pulse-text {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
   }
 
   .mic-btn,
@@ -1636,5 +1800,198 @@ Saved: ${new Date().toLocaleString()}`;
     border-top-color: white;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
+  }
+
+  /* Follow-up Search Styles */
+  .followup-search {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: var(--bg-primary);
+    border-top: 1px solid var(--border-color);
+  }
+
+  .followup-icon {
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .followup-input {
+    flex: 1;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    padding: 8px 16px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+    transition: all 0.2s;
+  }
+
+  .followup-input::placeholder {
+    color: var(--text-muted);
+  }
+
+  .followup-input:focus {
+    border-color: var(--accent-orange);
+    box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.15);
+  }
+
+  .followup-input:disabled {
+    opacity: 0.5;
+  }
+
+  .followup-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--accent-orange);
+    border: none;
+    border-radius: 50%;
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+
+  .followup-btn:hover:not(:disabled) {
+    background: #ea580c;
+    transform: scale(1.05);
+  }
+
+  .followup-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* New Query Dropdown Styles */
+  .new-query-dropdown {
+    position: relative;
+  }
+
+  .new-query-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: var(--accent-orange);
+    border: none;
+    border-radius: 6px;
+    color: white;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .new-query-btn:hover {
+    background: #ea580c;
+  }
+
+  .history-dropdown {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    margin-bottom: 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    min-width: 280px;
+    max-height: 400px;
+    overflow-y: auto;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    z-index: 100;
+  }
+
+  .history-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 12px 14px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+
+  .history-item:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+
+  .history-item.new {
+    color: var(--accent-orange);
+    font-weight: 600;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .history-item.new:hover {
+    background: var(--accent-orange-dim);
+  }
+
+  .history-item-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .history-title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .history-time {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .history-delete {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.15s;
+  }
+
+  .history-item:hover .history-delete {
+    opacity: 1;
+  }
+
+  .history-delete:hover {
+    background: var(--accent-red);
+    color: white;
+  }
+
+  .history-divider {
+    padding: 8px 14px 4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+  }
+
+  .spacer {
+    flex: 1;
   }
 </style>

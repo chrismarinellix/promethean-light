@@ -133,9 +133,27 @@ class MLOrganizer:
         print(f"[ML] [{timestamp}] Fetching document embeddings...")
 
         # Get documents with text for label generation
-        docs = self.db.exec(select(Document).limit(5000)).all()  # Limit for memory
+        # Use a fresh query to avoid stale session issues
+        docs = self.db.exec(select(Document).limit(5000)).all()
         if len(docs) < min_cluster_size:
             print(f"[ML] [{timestamp}] Not enough documents for clustering ({len(docs)} < {min_cluster_size})")
+            return 0
+
+        # Extract document data immediately to avoid session staleness during long clustering
+        doc_data = []
+        for doc in docs:
+            try:
+                if doc.raw_text and len(doc.raw_text) > 50:
+                    doc_data.append({
+                        'id': doc.id,
+                        'raw_text': doc.raw_text
+                    })
+            except Exception:
+                # Document may have been deleted - skip it
+                continue
+
+        if len(doc_data) < min_cluster_size:
+            print(f"[ML] [{timestamp}] Not enough valid documents ({len(doc_data)} < {min_cluster_size})")
             return 0
 
         # Get embeddings for documents (use first chunk of each)
@@ -143,17 +161,18 @@ class MLOrganizer:
         doc_ids = []
         doc_texts = []
 
-        for doc in docs:
+        for doc_info in doc_data:
             # Get the embedding from embedder (it may be cached or need to generate)
-            if doc.raw_text and len(doc.raw_text) > 50:
+            raw_text = doc_info['raw_text']
+            if raw_text and len(raw_text) > 50:
                 try:
                     # Use first 1000 chars for embedding (representative sample)
-                    text_sample = doc.raw_text[:1000]
+                    text_sample = raw_text[:1000]
                     embedding = self.embedder.embed(text_sample)
                     if embedding is not None and len(embedding) > 0:
                         doc_embeddings.append(embedding)
-                        doc_ids.append(doc.id)
-                        doc_texts.append(doc.raw_text[:500])  # For label generation
+                        doc_ids.append(doc_info['id'])
+                        doc_texts.append(raw_text[:500])  # For label generation
                 except Exception:
                     continue
 

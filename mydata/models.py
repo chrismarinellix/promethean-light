@@ -209,3 +209,32 @@ class SavedSearch(SQLModel, table=True):
 
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ResourceAllocation(SQLModel, table=True):
+    """Weekly resource allocation data for projects"""
+
+    __tablename__ = "resource_allocations"
+
+    id: int = Field(default=None, primary_key=True)
+    week: str = Field(index=True)  # ISO week format: "2024-W51"
+    allocations: str  # JSON: {project: [{staffName, hours, wanted, wantedBy}]}
+    project_notes: str = "{}"  # JSON: {project: "notes"}
+    project_status: str = "{}"  # JSON: {project: {waitingClient, waitingNSP, waitingAEMO, expectedBy}}
+
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class StakeholderData(SQLModel, table=True):
+    """Stakeholder CRM data for relationship management"""
+
+    __tablename__ = "stakeholder_data"
+
+    id: int = Field(default=None, primary_key=True)
+    data_key: str = Field(default="default", index=True, unique=True)  # Key for the dataset
+    stakeholders: str = "{}"  # JSON: {clientCode: {priority, meetingStatus, contacts, ...}}
+    meetings: str = "[]"  # JSON: [{id, clientCode, clientName, date, status, contact, purpose}]
+
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)

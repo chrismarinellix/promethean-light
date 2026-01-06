@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timesheet Analysis Dashboard - Vysus Group</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f8f8f8;
+            color: #1d1d1b;
+            line-height: 1.5;
+        }
+
+        .app-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #005454 0%, #00E3A9 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 32px;
+            font-weight: 300;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-left: 4px solid #00E3A9;
+        }
+
+        .card h3 {
+            font-size: 14px;
+            color: #485559;
+            font-weight: 400;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .card .value {
+            font-size: 36px;
+            color: #005454;
+            font-weight: 300;
+            margin-bottom: 5px;
+        }
+
+        .card .subtitle {
+            font-size: 13px;
+            color: #485559;
+        }
+
+        .filters {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .filters h3 {
+            color: #005454;
+            margin-bottom: 15px;
+            font-weight: 400;
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .filter-group input, .filter-group select {
+            padding: 10px;
+            border: 1px solid #dadada;
+            border-radius: 4px;
+            font-size: 14px;
+            min-width: 200px;
+        }
+
+        .filter-group button {
+            padding: 10px 20px;
+            background-color: #005454;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+
+        .filter-group button:hover {
+            background-color: #00E3A9;
+        }
+
+        .employee-table {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+            margin-bottom: 30px;
+        }
+
+        .table-header {
+            background-color: #005454;
+            color: white;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .table-header h2 {
+            font-weight: 400;
+            font-size: 20px;
+        }
+
+        .search-box {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            width: 300px;
+            font-size: 14px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            background-color: #ededed;
+        }
+
+        th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #005454;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 15px;
+            border-bottom: 1px solid #ededed;
+            font-size: 14px;
+        }
+
+        tr:hover {
+            background-color: #f8f8f8;
+        }
+
+        .utilization-bar {
+            height: 20px;
+            background-color: #ededed;
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .utilization-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #005454 0%, #00E3A9 100%);
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .utilization-fill.low {
+            background: linear-gradient(90deg, #f92d63 0%, #ff6b9d 100%);
+        }
+
+        .utilization-fill.medium {
+            background: linear-gradient(90deg, #4b81ef 0%, #1ca0f9 100%);
+        }
+
+        .utilization-fill.high {
+            background: linear-gradient(90deg, #005454 0%, #00E3A9 100%);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-billable {
+            background-color: #00E3A9;
+            color: #005454;
+        }
+
+        .badge-training {
+            background-color: #4b81ef;
+            color: white;
+        }
+
+        .badge-nonbillable {
+            background-color: #ededed;
+            color: #485559;
+        }
+
+        .badge-fixed {
+            background-color: #8e329c;
+            color: white;
+        }
+
+        .badge-hourly {
+            background-color: #1ca0f9;
+            color: white;
+        }
+
+        .alert {
+            background-color: #fff3cd;
+            border-left: 4px solid #f92d63;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+
+        .alert h4 {
+            color: #f92d63;
+            margin-bottom: 5px;
+        }
+
+        .expandable-row {
+            background-color: #f8f8f8;
+        }
+
+        .expandable-content {
+            padding: 20px;
+        }
+
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+        }
+
+        .detail-item {
+            background: white;
+            padding: 15px;
+            border-radius: 4px;
+            border-left: 3px solid #00E3A9;
+        }
+
+        .detail-item strong {
+            color: #005454;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .expand-btn {
+            background: none;
+            border: none;
+            color: #005454;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 0 10px;
+        }
+
+        .expand-btn:hover {
+            color: #00E3A9;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #485559;
+            font-size: 13px;
+        }
+
+        @media print {
+            .filters, .search-box, .expand-btn {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo } = React;
+
+        // Parse the timesheet data
+        const timesheetData = [
+            {employee: "Naveenkumar Rajagopal", empId: "470162", date: "11/21/2025", project: "GRD0500061", projectDesc: "Birdwood Energy Reserve", activity: "TASK 2.15", activityDesc: "Technical & Regulatory Connection Support (T&E)", reportCode: "HOURLY", hours: 1.0, revenue: 325.0, comments: "Internal discussion on Pending comments and PSCAD model issues"}
+        ];
+
+        function App() {
+            const [searchTerm, setSearchTerm] = useState('');
+            const [selectedEmployee, setSelectedEmployee] = useState('all');
+            const [selectedReportCode, setSelectedReportCode] = useState('all');
+            const [expandedRows, setExpandedRows] = useState(new Set());
+
+            // Calculate employee summaries
+            const employeeSummaries = useMemo(() => {
+                const summaries = {};
+
+                timesheetData.forEach(entry => {
+                    if (!summaries[entry.employee]) {
+                        summaries[entry.employee] = {
+                            employee: entry.employee,
+                            empId: entry.empId,
+                            totalHours: 0,
+                            billableHours: 0,
+                            nonBillableHours: 0,
+                            trainingHours: 0,
+                            fixedHours: 0,
+                            hourlyHours: 0,
+                            totalRevenue: 0,
+                            entries: []
+                        };
+                    }
+
+                    const summary = summaries[entry.employee];
+                    summary.totalHours += entry.internalHours;
+                    summary.totalRevenue += entry.salesAmount;
+                    summary.entries.push(entry);
+
+                    if (entry.reportCode === 'FIXED HRS') {
+                        summary.fixedHours += entry.internalHours;
+                        summary.billableHours += entry.internalHours;
+                    } else if (entry.reportCode === 'HOURLY') {
+                        summary.hourlyHours += entry.internalHours;
+                        summary.billableHours += entry.internalHours;
+                    } else if (entry.reportCode === 'NO CHARGE') {
+                        summary.nonBillableHours += entry.internalHours;
+
+                        // Check if it's training
+                        if (entry.activity && (
+                            entry.activity.includes('070') ||
+                            entry.activity.includes('Training') ||
+                            entry.activity.includes('030') ||
+                            entry.comments.toLowerCase().includes('training')
+                        )) {
+                            summary.trainingHours += entry.internalHours;
+                        }
+                    }
+                });
+
+                // Calculate utilization (assuming 8 hour work days, 5 days in this period)
+                Object.values(summaries).forEach(summary => {
+                    const workingHours = 40; // 5 days * 8 hours
+                    summary.utilization = (summary.billableHours / summary.totalHours) * 100;
+                    summary.capacity = (summary.totalHours / workingHours) * 100;
+                });
+
+                return Object.values(summaries);
+            }, []);
+
+            // Calculate overall statistics
+            const overallStats = useMemo(() => {
+                const stats = {
+                    totalEmployees: employeeSummaries.length,
+                    totalHours: 0,
+                    totalBillableHours: 0,
+                    totalRevenue: 0,
+                    totalTrainingHours: 0,
+                    avgUtilization: 0
+                };
+
+                employeeSummaries.forEach(emp => {
+                    stats.totalHours += emp.totalHours;
+                    stats.totalBillableHours += emp.billableHours;
+                    stats.totalRevenue += emp.totalRevenue;
+                    stats.totalTrainingHours += emp.trainingHours;
+                    stats.avgUtilization += emp.utilization;
+                });
+
+                stats.avgUtilization = stats.avgUtilization / stats.totalEmployees;
+
+                return stats;
+            }, [employeeSummaries]);
+
+            // Filter data
+            const filteredData = useMemo(() => {
+                return employeeSummaries.filter(emp => {
+                    const matchesSearch = emp.employee.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                        emp.empId.includes(searchTerm);
+                    const matchesEmployee = selectedEmployee === 'all' || emp.employee === selectedEmployee;
+
+                    return matchesSearch && matchesEmployee;
+                });
+            }, [employeeSummaries, searchTerm, selectedEmployee]);
+
+            const toggleRow = (empId) => {
+                const newExpanded = new Set(expandedRows);
+                if (newExpanded.has(empId)) {
+                    newExpanded.delete(empId);
+                } else {
+                    newExpanded.add(empId);
+                }
+                setExpandedRows(newExpanded);
+            };
+
+            const getUtilizationClass = (utilization) => {
+                if (utilization < 60) return 'low';
+                if (utilization < 80) return 'medium';
+                return 'high';
+            };
+
+            const uniqueEmployees = [...new Set(timesheetData.map(e => e.employee))].sort();
+
+            return (
+                <div className="app-container">
+                    <div className="header">
+                        <h1>Timesheet Analysis Dashboard</h1>
+                        <p>Week of Nov 17-21, 2025 | REBUILT - Correct Columns (Y=Hours, AI=Revenue)</p>
+                    </div>
+
+                    {/* Summary Cards */}
+                    <div className="summary-cards">
+                        <div className="card">
+                            <h3>Total Employees</h3>
+                            <div className="value">{overallStats.totalEmployees}</div>
+                            <div className="subtitle">Active resources this week</div>
+                        </div>
+                        <div className="card">
+                            <h3>Total Hours</h3>
+                            <div className="value">{overallStats.totalHours.toFixed(1)}</div>
+                            <div className="subtitle">{overallStats.totalBillableHours.toFixed(1)} billable hours</div>
+                        </div>
+                        <div className="card">
+                            <h3>Avg Utilization</h3>
+                            <div className="value">{overallStats.avgUtilization.toFixed(1)}%</div>
+                            <div className="subtitle">Billable vs total hours</div>
+                        </div>
+                        <div className="card">
+                            <h3>Total Revenue</h3>
+                            <div className="value">${(overallStats.totalRevenue / 1000).toFixed(1)}k</div>
+                            <div className="subtitle">AUD from billable work</div>
+                        </div>
+                        <div className="card">
+                            <h3>Training Hours</h3>
+                            <div className="value">{overallStats.totalTrainingHours.toFixed(1)}</div>
+                            <div className="subtitle">Innovation & development time</div>
+                        </div>
+                    </div>
+
+                    {/* Alerts */}
+                    {employeeSummaries.filter(e => e.utilization < 60).length > 0 && (
+                        <div className="alert">
+                            <h4>⚠ Low Utilization Alert</h4>
+                            <p>{employeeSummaries.filter(e => e.utilization < 60).length} employee(s) with utilization below 60%. Consider reviewing workload distribution.</p>
+                        </div>
+                    )}
+
+                    {/* Filters */}
+                    <div className="filters">
+                        <h3>Filters</h3>
+                        <div className="filter-group">
+                            <select value={selectedEmployee} onChange={(e) => setSelectedEmployee(e.target.value)}>
+                                <option value="all">All Employees</option>
+                                {uniqueEmployees.map(emp => (
+                                    <option key={emp} value={emp}>{emp}</option>
+                                ))}
+                            </select>
+                            <button onClick={() => {
+                                setSearchTerm('');
+                                setSelectedEmployee('all');
+                                setSelectedReportCode('all');
+                            }}>Clear Filters</button>
+                        </div>
+                    </div>
+
+                    {/* Employee Table */}
+                    <div className="employee-table">
+                        <div className="table-header">
+                            <h2>Employee Breakdown</h2>
+                            <input
+                                type="text"
+                                className="search-box"
+                                placeholder="Search by name or ID..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                        </div>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th></th>
+                                    <th>Employee</th>
+                                    <th>ID</th>
+                                    <th>Total Hours</th>
+                                    <th>Billable</th>
+                                    <th>Non-Billable</th>
+                                    <th>Training</th>
+                                    <th>Fixed/Hourly</th>
+                                    <th>Revenue</th>
+                                    <th>Utilization</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filteredData.map((emp) => (
+                                    <React.Fragment key={emp.empId}>
+                                        <tr>
+                                            <td>
+                                                <button
+                                                    className="expand-btn"
+                                                    onClick={() => toggleRow(emp.empId)}
+                                                >
+                                                    {expandedRows.has(emp.empId) ? '−' : '+'}
+                                                </button>
+                                            </td>
+                                            <td><strong>{emp.employee}</strong></td>
+                                            <td>{emp.empId}</td>
+                                            <td>{emp.totalHours.toFixed(1)}h</td>
+                                            <td>
+                                                <span className="badge badge-billable">{emp.billableHours.toFixed(1)}h</span>
+                                            </td>
+                                            <td>
+                                                <span className="badge badge-nonbillable">{emp.nonBillableHours.toFixed(1)}h</span>
+                                            </td>
+                                            <td>
+                                                {emp.trainingHours > 0 && (
+                                                    <span className="badge badge-training">{emp.trainingHours.toFixed(1)}h</span>
+                                                )}
+                                            </td>
+                                            <td>
+                                                <span className="badge badge-fixed">{emp.fixedHours.toFixed(1)}h</span>
+                                                {' '}
+                                                <span className="badge badge-hourly">{emp.hourlyHours.toFixed(1)}h</span>
+                                            </td>
+                                            <td>${emp.totalRevenue.toLocaleString()}</td>
+                                            <td>
+                                                <div className="utilization-bar">
+                                                    <div
+                                                        className={`utilization-fill ${getUtilizationClass(emp.utilization)}`}
+                                                        style={{width: `${Math.min(emp.utilization, 100)}%`}}
+                                                    >
+                                                        {emp.utilization.toFixed(0)}%
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {expandedRows.has(emp.empId) && (
+                                            <tr className="expandable-row">
+                                                <td colSpan="10">
+                                                    <div className="expandable-content">
+                                                        <h4 style={{color: '#005454', marginBottom: '15px'}}>Activity Details for {emp.employee}</h4>
+                                                        <div className="detail-grid">
+                                                            {emp.entries.map((entry, idx) => (
+                                                                <div key={idx} className="detail-item">
+                                                                    <strong>{entry.date} - {entry.activity}</strong>
+                                                                    <div>Project: {entry.project}</div>
+                                                                    <div>Hours: {entry.internalHours}h ({entry.reportCode})</div>
+                                                                    <div>Revenue: ${entry.salesAmount}</div>
+                                                                    {entry.comments && <div style={{marginTop: '8px', fontStyle: 'italic', color: '#485559'}}>"{entry.comments}"</div>}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </React.Fragment>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="footer">
+                        <p>© 2025 Vysus Group | Timesheet Analysis Dashboard</p>
+                        <p>For queries about individual timesheets, please contact your team lead directly.</p>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
