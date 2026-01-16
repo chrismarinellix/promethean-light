@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Program View - January 2026</title>
+    <style>
+        /* Vysus Brand Colors */
+        :root {
+            --vysus-stockholm-neon: #00E3A9;
+            --vysus-malmo-green: #005454;
+            --vysus-white: #FFFFFF;
+            --vysus-oslo-snow: #F8F8F8;
+            --vysus-stavanger-ice: #EDEDED;
+            --vysus-bergen-rain: #DADADA;
+            --vysus-scandinavia-rock: #485559;
+            --vysus-trondheim-night: #1D1D1B;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, var(--vysus-trondheim-night) 0%, #0f2a2a 100%);
+            color: var(--vysus-oslo-snow);
+            min-height: 100vh;
+            padding: 30px;
+        }
+
+        /* Vysus Marque */
+        .vysus-marque {
+            width: 40px;
+            height: auto;
+            margin-right: 15px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid var(--vysus-stockholm-neon);
+        }
+        .header-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+        .header h1 { font-size: 2.5em; color: var(--vysus-stockholm-neon); margin-bottom: 10px; font-weight: 400; }
+        .header .date { color: var(--vysus-bergen-rain); font-size: 1.2em; }
+        .header .last-updated { color: var(--vysus-scandinavia-rock); font-size: 0.9em; margin-top: 5px; }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .tab {
+            padding: 12px 24px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(0, 227, 169, 0.2);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+        .tab:hover { background: rgba(0, 227, 169, 0.15); }
+        .tab.active { background: var(--vysus-stockholm-neon); border-color: var(--vysus-stockholm-neon); color: var(--vysus-trondheim-night); }
+
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); gap: 25px; }
+
+        .card {
+            background: rgba(0, 84, 84, 0.15);
+            border-radius: 12px;
+            padding: 25px;
+            border: 1px solid rgba(0, 227, 169, 0.2);
+        }
+        .card h2 {
+            font-size: 1.3em;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--vysus-stockholm-neon);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 400;
+            color: var(--vysus-stockholm-neon);
+        }
+        .card h2 .count {
+            background: var(--vysus-stockholm-neon);
+            color: var(--vysus-trondheim-night);
+            padding: 3px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+
+        .full-width { grid-column: 1 / -1; }
+
+        /* Activity Timeline */
+        .timeline-card {
+            background: linear-gradient(135deg, rgba(0, 84, 84, 0.25) 0%, rgba(0, 84, 84, 0.1) 100%);
+            border: 1px solid rgba(0, 227, 169, 0.3);
+        }
+        .timeline-card h2 { border-bottom-color: var(--vysus-stockholm-neon); color: var(--vysus-stockholm-neon); }
+        .timeline-item {
+            display: flex;
+            gap: 15px;
+            padding: 15px 0;
+            border-bottom: 1px solid rgba(0, 227, 169, 0.15);
+        }
+        .timeline-item:last-child { border-bottom: none; }
+        .timeline-date {
+            min-width: 80px;
+            font-weight: 600;
+            color: var(--vysus-stockholm-neon);
+        }
+        .timeline-content { flex: 1; }
+        .timeline-client {
+            font-weight: 600;
+            color: var(--vysus-white);
+        }
+        .timeline-notes {
+            color: var(--vysus-bergen-rain);
+            margin-top: 5px;
+            font-size: 0.9em;
+        }
+
+        /* Sales Radar */
+        .radar-card {
+            background: linear-gradient(135deg, rgba(0, 84, 84, 0.25) 0%, rgba(0, 84, 84, 0.1) 100%);
+            border: 1px solid rgba(0, 227, 169, 0.3);
+        }
+        .radar-card h2 { border-bottom-color: var(--vysus-stockholm-neon); color: var(--vysus-stockholm-neon); }
+        .radar-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(0, 227, 169, 0.15);
+        }
+        .radar-item:last-child { border-bottom: none; }
+        .radar-status {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        .radar-status.hot { background: #F92D63; color: white; }
+        .radar-status.warm { background: var(--vysus-scandinavia-rock); color: white; }
+        .radar-status.new { background: var(--vysus-stockholm-neon); color: var(--vysus-trondheim-night); }
+
+        /* Stakeholders */
+        .stakeholder-card {
+            background: linear-gradient(135deg, rgba(0, 84, 84, 0.25) 0%, rgba(0, 84, 84, 0.1) 100%);
+            border: 1px solid rgba(0, 227, 169, 0.3);
+        }
+        .stakeholder-card h2 { border-bottom-color: var(--vysus-stockholm-neon); color: var(--vysus-stockholm-neon); }
+        .stakeholder {
+            padding: 15px;
+            margin-bottom: 15px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            border-left: 3px solid var(--vysus-stockholm-neon);
+        }
+        .stakeholder:last-child { margin-bottom: 0; }
+        .stakeholder-name {
+            font-weight: 600;
+            font-size: 1.1em;
+            color: var(--vysus-white);
+        }
+        .stakeholder-company {
+            color: var(--vysus-stockholm-neon);
+            font-size: 0.9em;
+            margin-bottom: 10px;
+        }
+        .stakeholder-contact {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            font-size: 0.9em;
+        }
+        .stakeholder-contact span {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .stakeholder-notes {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(0, 227, 169, 0.15);
+            color: var(--vysus-bergen-rain);
+            font-size: 0.9em;
+        }
+        .pulsing {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 5px rgba(0, 227, 169, 0.3); }
+            50% { box-shadow: 0 0 15px rgba(0, 227, 169, 0.5), 0 0 25px rgba(0, 227, 169, 0.3); }
+        }
+
+        /* Calendar */
+        .calendar-card {
+            background: linear-gradient(135deg, rgba(0, 84, 84, 0.25) 0%, rgba(0, 84, 84, 0.1) 100%);
+            border: 1px solid rgba(0, 227, 169, 0.3);
+        }
+        .calendar-card h2 { border-bottom-color: var(--vysus-stockholm-neon); color: var(--vysus-stockholm-neon); }
+        .calendar-item {
+            display: flex;
+            gap: 15px;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(0, 227, 169, 0.15);
+        }
+        .calendar-item:last-child { border-bottom: none; }
+        .calendar-date {
+            min-width: 100px;
+            text-align: center;
+            background: rgba(0, 227, 169, 0.15);
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(0, 227, 169, 0.3);
+        }
+        .calendar-date .day { font-size: 1.5em; font-weight: 700; color: var(--vysus-stockholm-neon); }
+        .calendar-date .month { font-size: 0.8em; color: var(--vysus-stockholm-neon); }
+        .calendar-date .weekday { font-size: 0.75em; color: var(--vysus-bergen-rain); }
+        .calendar-details { flex: 1; }
+        .calendar-title { font-weight: 600; font-size: 1.1em; color: var(--vysus-white); }
+        .calendar-time { color: var(--vysus-stockholm-neon); margin: 5px 0; }
+        .calendar-attendees { color: var(--vysus-bergen-rain); font-size: 0.9em; }
+
+        /* Actions */
+        .actions-card {
+            background: linear-gradient(135deg, rgba(0, 84, 84, 0.25) 0%, rgba(0, 84, 84, 0.1) 100%);
+            border: 1px solid rgba(0, 227, 169, 0.3);
+        }
+        .actions-card h2 { border-bottom-color: var(--vysus-stockholm-neon); color: var(--vysus-stockholm-neon); }
+        .action-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(0, 227, 169, 0.15);
+        }
+        .action-item:last-child { border-bottom: none; }
+        .action-priority {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-top: 5px;
+            flex-shrink: 0;
+        }
+        .action-priority.high { background: #F92D63; box-shadow: 0 0 8px #F92D63; }
+        .action-priority.medium { background: var(--vysus-stockholm-neon); box-shadow: 0 0 8px var(--vysus-stockholm-neon); }
+        .action-due {
+            font-size: 0.8em;
+            color: var(--vysus-scandinavia-rock);
+            margin-top: 5px;
+        }
+
+        /* Industry Map */
+        .map-card {
+            background: linear-gradient(135deg, rgba(0, 84, 84, 0.25) 0%, rgba(0, 84, 84, 0.1) 100%);
+            border: 1px solid rgba(0, 227, 169, 0.3);
+        }
+        .map-card h2 { border-bottom-color: var(--vysus-stockholm-neon); color: var(--vysus-stockholm-neon); }
+        .map-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+        }
+        .map-item {
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        .map-item:hover { transform: scale(1.02); }
+        .map-item.highlight {
+            border: 2px solid var(--vysus-stockholm-neon);
+            animation: pulse-neon 2s infinite;
+        }
+        @keyframes pulse-neon {
+            0%, 100% { box-shadow: 0 0 5px rgba(0, 227, 169, 0.3); }
+            50% { box-shadow: 0 0 15px rgba(0, 227, 169, 0.5), 0 0 25px rgba(0, 227, 169, 0.3); }
+        }
+        .map-item .company { font-weight: 600; margin-bottom: 5px; color: var(--vysus-white); }
+        .map-item .contact { font-size: 0.85em; color: var(--vysus-stockholm-neon); }
+        .map-item .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+        .map-item .status-dot.active { background: var(--vysus-stockholm-neon); }
+
+        /* Projects Summary */
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .summary-box {
+            background: rgba(0, 84, 84, 0.2);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid rgba(0, 227, 169, 0.2);
+        }
+        .summary-box .number {
+            font-size: 2.5em;
+            font-weight: 700;
+            line-height: 1;
+            letter-spacing: -2px;
+        }
+        .summary-box .label {
+            color: var(--vysus-bergen-rain);
+            margin-top: 8px;
+            font-size: 0.9em;
+        }
+        .summary-box.active .number { color: var(--vysus-stockholm-neon); }
+        .summary-box.pipeline .number { color: var(--vysus-stockholm-neon); }
+        .summary-box.clients .number { color: var(--vysus-stockholm-neon); }
+        .summary-box.actions .number { color: #F92D63; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px 15px; text-align: left; }
+        th {
+            background: rgba(0, 227, 169, 0.15);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.85em;
+            color: var(--vysus-stockholm-neon);
+        }
+        tr:nth-child(even) { background: rgba(0, 84, 84, 0.1); }
+        tr:hover { background: rgba(0, 227, 169, 0.1); }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        .status-badge.green { background: var(--vysus-stockholm-neon); color: var(--vysus-trondheim-night); }
+        .status-badge.blue { background: var(--vysus-malmo-green); color: var(--vysus-white); }
+        .status-badge.amber { background: var(--vysus-scandinavia-rock); color: var(--vysus-white); }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <svg class="vysus-marque" viewBox="0 0 100 112" xmlns="http://www.w3.org/2000/svg">
+                <path d="M0 0 L38.7 112.2 L85 112.2 L46.2 0 Z" fill="#00E3A9"/>
+                <path d="M86.2 2.8 L74.8 10.9 L67.6 22.6 L65.7 36.1 L68.5 48.1 L76.9 59.8 L88.2 66.6 L100 68.6 L100 0 Z" fill="#00E3A9"/>
+            </svg>
+            <h1>Program View</h1>
+        </div>
+        <div class="date">January 2026</div>
+        <div class="last-updated">Last Updated: 14 January 2026</div>
+    </div>
+
+    <div class="summary-grid">
+        <div class="summary-box active">
+            <div class="number">9</div>
+            <div class="label">Active Projects</div>
+        </div>
+        <div class="summary-box pipeline">
+            <div class="number">6</div>
+            <div class="label">Pipeline</div>
+        </div>
+        <div class="summary-box clients">
+            <div class="number">2</div>
+            <div class="label">Client Calls Today</div>
+        </div>
+        <div class="summary-box actions">
+            <div class="number">4</div>
+            <div class="label">Actions Due</div>
+        </div>
+    </div>
+
+    <div class="grid">
+        <!-- Activity Timeline - Last 14 Days -->
+        <div class="card timeline-card full-width">
+            <h2>Activity Timeline - Last 14 Days <span class="count">3</span></h2>
+            <div class="timeline-item">
+                <div class="timeline-date">14 Jan</div>
+                <div class="timeline-content">
+                    <div class="timeline-client">Damien Pasco & Sharon Zhang - OWC</div>
+                    <div class="timeline-notes">
+                        Email exchange re BESS portfolio opportunity. OWC (part of ABL Group) has portfolio of small-scale BESS projects in NSW and VIC.
+                        Previous discussions in 2024 with Mark/Shilpa. Chris Marinelli now business lead.
+                        Call proposed for Mon 20-Jan or Tue 21-Jan at 11am. Meeting invite sent.
+                    </div>
+                </div>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-date">8 Jan</div>
+                <div class="timeline-content">
+                    <div class="timeline-client">Nick Board - Maybros</div>
+                    <div class="timeline-notes">
+                        Phone call completed. Nick is happy with Montaz - excellent communicator.
+                        Project going well. They are under timeline pressure. There have been delays on their side -
+                        need to be aware so it doesn't come back on us. Nick is non-technical.
+                        Push hard to support them as much as possible.
+                    </div>
+                </div>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-date">8 Jan</div>
+                <div class="timeline-content">
+                    <div class="timeline-client">Chris Jopceski - Lightsource</div>
+                    <div class="timeline-notes">
+                        Phone call completed. Chris is happy with everything.
+                        Has another 2 projects coming up (added to Sales Radar).
+                        Meeting scheduled for 21 January - Tony, Ed and I meeting Chris at 9:00 AM.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stakeholders / Communications -->
+        <div class="card stakeholder-card">
+            <h2>Stakeholders <span class="count">4</span></h2>
+            <div class="stakeholder pulsing">
+                <div class="stakeholder-name">Damien Pasco</div>
+                <div class="stakeholder-company">OWC (ABL Group)</div>
+                <div class="stakeholder-contact">
+                    <span>Email: damien.pasco@owcltd.com</span>
+                </div>
+                <div class="stakeholder-notes">
+                    Renewable energy consultancy. Portfolio of small-scale BESS in NSW/VIC.
+                    Previous relationship with Vysus in 2024. Call scheduled 20 Jan.
+                </div>
+            </div>
+            <div class="stakeholder pulsing">
+                <div class="stakeholder-name">Sharon Zhang</div>
+                <div class="stakeholder-company">OWC (ABL Group)</div>
+                <div class="stakeholder-contact">
+                    <span>Email: sharon.zhang@owcltd.com</span>
+                </div>
+                <div class="stakeholder-notes">
+                    CC'd on BESS portfolio opportunity. Technical contact at OWC.
+                </div>
+            </div>
+            <div class="stakeholder pulsing">
+                <div class="stakeholder-name">Nick Board</div>
+                <div class="stakeholder-company">Maybros</div>
+                <div class="stakeholder-contact">
+                    <span>Phone: 0468 425 552</span>
+                </div>
+                <div class="stakeholder-notes">
+                    Non-technical contact. Very happy with Montaz's communication.
+                    Under timeline pressure - be aware of delays on their side.
+                </div>
+            </div>
+            <div class="stakeholder pulsing">
+                <div class="stakeholder-name">Chris Jopceski</div>
+                <div class="stakeholder-company">Lightsource</div>
+                <div class="stakeholder-contact">
+                    <span>Phone: 0431 363 377</span>
+                    <span>Email: jovceski@lightsource.com</span>
+                </div>
+                <div class="stakeholder-notes">
+                    Happy with all current work. 2 new projects in pipeline.
+                    Key relationship - meeting 21 Jan.
+                </div>
+            </div>
+        </div>
+
+        <!-- Sales Radar -->
+        <div class="card radar-card">
+            <h2>Sales Radar <span class="count">6</span></h2>
+            <div class="radar-item">
+                <div>
+                    <strong>OWC - BESS Portfolio (NSW/VIC)</strong>
+                    <div style="font-size: 0.85em; color: #94a3b8;">Damien Pasco / Sharon Zhang - Small-scale BESS projects</div>
+                </div>
+                <span class="radar-status hot">HOT</span>
+            </div>
+            <div class="radar-item">
+                <div>
+                    <strong>Lightsource - Project 1</strong>
+                    <div style="font-size: 0.85em; color: #94a3b8;">Chris Jopceski - Details TBC</div>
+                </div>
+                <span class="radar-status new">NEW</span>
+            </div>
+            <div class="radar-item">
+                <div>
+                    <strong>Lightsource - Project 2</strong>
+                    <div style="font-size: 0.85em; color: #94a3b8;">Chris Jopceski - Details TBC</div>
+                </div>
+                <span class="radar-status new">NEW</span>
+            </div>
+            <div class="radar-item">
+                <div>
+                    <strong>Mt Challenger</strong>
+                    <div style="font-size: 0.85em; color: #94a3b8;">Alinta Energy</div>
+                </div>
+                <span class="radar-status warm">AWAITING</span>
+            </div>
+            <div class="radar-item">
+                <div>
+                    <strong>Phillip Island Variation</strong>
+                    <div style="font-size: 0.85em; color: #94a3b8;">$100K Variation</div>
+                </div>
+                <span class="radar-status hot">HOT</span>
+            </div>
+            <div class="radar-item">
+                <div>
+                    <strong>Boomer Hybrid</strong>
+                    <div style="font-size: 0.85em; color: #94a3b8;">Ark Energy - Delayed to 2026</div>
+                </div>
+                <span class="radar-status warm">DELAYED</span>
+            </div>
+        </div>
+
+        <!-- Calendar -->
+        <div class="card calendar-card">
+            <h2>Upcoming Calendar <span class="count">3</span></h2>
+            <div class="calendar-item">
+                <div class="calendar-date">
+                    <div class="day">20</div>
+                    <div class="month">JAN</div>
+                    <div class="weekday">Monday</div>
+                </div>
+                <div class="calendar-details">
+                    <div class="calendar-title">OWC / Vysus - BESS Portfolio Discussion</div>
+                    <div class="calendar-time">11:00 AM</div>
+                    <div class="calendar-attendees">Attendees: Tony, Chris, Damien Pasco, Sharon Zhang</div>
+                </div>
+            </div>
+            <div class="calendar-item">
+                <div class="calendar-date">
+                    <div class="day">21</div>
+                    <div class="month">JAN</div>
+                    <div class="weekday">Tuesday</div>
+                </div>
+                <div class="calendar-details">
+                    <div class="calendar-title">Meeting with Chris Jopceski - Lightsource</div>
+                    <div class="calendar-time">9:00 AM</div>
+                    <div class="calendar-attendees">Attendees: Tony, Ed, You</div>
+                </div>
+            </div>
+            <div class="calendar-item">
+                <div class="calendar-date">
+                    <div class="day">8</div>
+                    <div class="month">FEB</div>
+                    <div class="weekday">Sunday</div>
+                </div>
+                <div class="calendar-details">
+                    <div class="calendar-title">Follow-up Call - Nick Board (Maybros)</div>
+                    <div class="calendar-time">Monthly Check-in</div>
+                    <div class="calendar-attendees">Same time as 8 Jan call</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions / Follow-ups -->
+        <div class="card actions-card">
+            <h2>Actions & Follow-ups <span class="count">4</span></h2>
+            <div class="action-item">
+                <div class="action-priority high"></div>
+                <div>
+                    <strong>Prepare for OWC BESS call</strong>
+                    <div style="font-size: 0.9em; color: #94a3b8;">
+                        Meeting with Damien & Sharon on 20 Jan at 11am.
+                        Discuss NSW/VIC BESS portfolio, Vysus capabilities from Q2, grid connection support.
+                    </div>
+                    <div class="action-due">Due: Before 20 January 2026</div>
+                </div>
+            </div>
+            <div class="action-item">
+                <div class="action-priority high"></div>
+                <div>
+                    <strong>Talk to Montaz about timeline</strong>
+                    <div style="font-size: 0.9em; color: #94a3b8;">
+                        Maybros under timeline pressure - need to communicate timeline well.
+                        Be aware of delays on their side so they don't come back on us.
+                    </div>
+                    <div class="action-due">Due: ASAP</div>
+                </div>
+            </div>
+            <div class="action-item">
+                <div class="action-priority medium"></div>
+                <div>
+                    <strong>Follow up with Nick Board (Maybros)</strong>
+                    <div style="font-size: 0.9em; color: #94a3b8;">
+                        Monthly check-in call - same time next month
+                    </div>
+                    <div class="action-due">Due: 8 February 2026</div>
+                </div>
+            </div>
+            <div class="action-item">
+                <div class="action-priority medium"></div>
+                <div>
+                    <strong>Prepare for Lightsource meeting</strong>
+                    <div style="font-size: 0.9em; color: #94a3b8;">
+                        Meeting with Chris on 21 Jan - cover everything he needs.
+                        Discuss 2 new projects.
+                    </div>
+                    <div class="action-due">Due: Before 21 January 2026</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Industry Map -->
+        <div class="card map-card full-width">
+            <h2>Industry Map - Key Contacts</h2>
+            <div class="map-grid">
+                <div class="map-item highlight">
+                    <div class="status-dot active"></div>
+                    <div class="company">OWC (ABL Group)</div>
+                    <div class="contact">Damien Pasco</div>
+                </div>
+                <div class="map-item highlight">
+                    <div class="status-dot active"></div>
+                    <div class="company">Lightsource</div>
+                    <div class="contact">Chris Jopceski</div>
+                </div>
+                <div class="map-item highlight">
+                    <div class="status-dot active"></div>
+                    <div class="company">Maybros</div>
+                    <div class="contact">Nick Board</div>
+                </div>
+                <div class="map-item">
+                    <div class="status-dot active"></div>
+                    <div class="company">Alinta Energy</div>
+                    <div class="contact">Mt Challenger</div>
+                </div>
+                <div class="map-item">
+                    <div class="status-dot active"></div>
+                    <div class="company">Ark Energy</div>
+                    <div class="contact">Boomer Hybrid</div>
+                </div>
+                <div class="map-item">
+                    <div class="status-dot active"></div>
+                    <div class="company">Envision</div>
+                    <div class="contact">$150K Won</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Projects -->
+        <div class="card full-width">
+            <h2>Active Projects <span class="count">9</span></h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Project</th>
+                        <th>Client</th>
+                        <th>Lead</th>
+                        <th>Status</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Maybros Project</strong></td>
+                        <td>Maybros (Nick Board)</td>
+                        <td>Montaz</td>
+                        <td><span class="status-badge green">ON TRACK</span></td>
+                        <td>Client happy. Under timeline pressure - monitor closely.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Lightsource Current</strong></td>
+                        <td>Lightsource (Chris Jopceski)</td>
+                        <td>-</td>
+                        <td><span class="status-badge green">ON TRACK</span></td>
+                        <td>Client happy with everything. 2 new projects coming.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Envision</strong></td>
+                        <td>Envision</td>
+                        <td>-</td>
+                        <td><span class="status-badge green">WON</span></td>
+                        <td>$150K - Work started</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Sandy Creek Hybrid</strong></td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td><span class="status-badge green">SIGNED</span></td>
+                        <td>PV + BESS</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Clements Gap BESS</strong></td>
+                        <td>-</td>
+                        <td>Naveen</td>
+                        <td><span class="status-badge blue">IN PROGRESS</span></td>
+                        <td>DD - R1 commission Dec</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Hallett BESS</strong></td>
+                        <td>-</td>
+                        <td>Naveen</td>
+                        <td><span class="status-badge blue">IN PROGRESS</span></td>
+                        <td>DD</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Wellington</strong></td>
+                        <td>-</td>
+                        <td>Ed / Khadija</td>
+                        <td><span class="status-badge blue">IN PROGRESS</span></td>
+                        <td>-</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Markaranka BESS</strong></td>
+                        <td>-</td>
+                        <td>Montaz</td>
+                        <td><span class="status-badge blue">IN PROGRESS</span></td>
+                        <td>BESS</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Boulder Creek WF</strong></td>
+                        <td>-</td>
+                        <td>Ed/Tony</td>
+                        <td><span class="status-badge blue">IN PROGRESS</span></td>
+                        <td>Wind Farm</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Make the pulsing dots more visible
+        document.querySelectorAll('.highlight').forEach(el => {
+            el.style.cursor = 'pointer';
+        });
+    </script>
+</body>
+</html>
