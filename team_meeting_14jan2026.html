@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Team Meeting - 14 January 2026 | Vysus Group</title>
+    <style>
+        :root {
+            --vysus-stockholm-neon: #00E3A9;
+            --vysus-malmo-green: #005454;
+            --vysus-white: #FFFFFF;
+            --vysus-oslo-snow: #F8F8F8;
+            --vysus-stavanger-ice: #EDEDED;
+            --vysus-bergen-rain: #DADADA;
+            --vysus-scandinavia-rock: #485559;
+            --vysus-trondheim-night: #1D1D1B;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, var(--vysus-malmo-green) 0%, var(--vysus-trondheim-night) 100%);
+            min-height: 100vh;
+            color: var(--vysus-white);
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+
+        .vysus-marque {
+            width: 60px;
+            height: auto;
+            margin-bottom: 20px;
+            filter: drop-shadow(0 4px 20px rgba(0, 227, 169, 0.3));
+        }
+
+        .header h1 {
+            font-size: 42px;
+            font-weight: 300;
+            letter-spacing: 2px;
+            margin-bottom: 10px;
+        }
+
+        .header .date {
+            font-size: 18px;
+            color: var(--vysus-stockholm-neon);
+            font-weight: 500;
+        }
+
+        .tagline {
+            font-size: 14px;
+            color: var(--vysus-bergen-rain);
+            margin-top: 15px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+        }
+
+        /* News Section */
+        .news-section {
+            background: linear-gradient(135deg, rgba(0, 227, 169, 0.15) 0%, rgba(0, 84, 84, 0.3) 100%);
+            border: 2px solid var(--vysus-stockholm-neon);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 40px;
+            text-align: center;
+        }
+
+        .news-section h2 {
+            font-size: 24px;
+            color: var(--vysus-stockholm-neon);
+            margin-bottom: 20px;
+        }
+
+        .news-section p {
+            font-size: 17px;
+            line-height: 1.8;
+            color: var(--vysus-oslo-snow);
+        }
+
+        .news-section .farewell {
+            margin-top: 15px;
+            font-size: 20px;
+            color: var(--vysus-stockholm-neon);
+            font-weight: 500;
+        }
+
+        /* Elephant Reveal Section */
+        .elephant-section {
+            margin: 40px 0;
+            text-align: center;
+        }
+
+        .elephant-content, .amani-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.6s ease, opacity 0.4s ease;
+            opacity: 0;
+        }
+
+        .elephant-content.revealed, .amani-content.revealed {
+            max-height: 2000px;
+            opacity: 1;
+        }
+
+        .elephant-message {
+            background: rgba(0, 227, 169, 0.1);
+            border: 2px solid var(--vysus-stockholm-neon);
+            border-radius: 16px;
+            padding: 35px;
+            margin-top: 30px;
+            text-align: left;
+        }
+
+        .elephant-message p {
+            font-size: 17px;
+            line-height: 1.9;
+            color: var(--vysus-oslo-snow);
+            margin-bottom: 20px;
+        }
+
+        .elephant-message p:last-child {
+            margin-bottom: 0;
+        }
+
+        .key-statement {
+            background: rgba(0, 84, 84, 0.6);
+            border-left: 4px solid var(--vysus-stockholm-neon);
+            padding: 25px;
+            margin: 25px 0;
+            border-radius: 0 12px 12px 0;
+        }
+
+        .key-statement p {
+            font-size: 19px;
+            font-weight: 500;
+            color: var(--vysus-white);
+            margin: 0;
+        }
+
+        .key-statement strong {
+            color: var(--vysus-stockholm-neon);
+        }
+
+        /* Comparison Section with Arrows */
+        .comparison-section {
+            margin: 40px 0;
+        }
+
+        .comparison-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .comparison-header h2 {
+            font-size: 32px;
+            color: var(--vysus-white);
+        }
+
+        .comparison-wrapper {
+            display: flex;
+            align-items: stretch;
+            gap: 0;
+        }
+
+        .comparison-column {
+            flex: 1;
+            border-radius: 16px;
+            padding: 30px;
+            min-height: 450px;
+        }
+
+        .perception-column {
+            background: linear-gradient(135deg, rgba(255, 100, 100, 0.15) 0%, rgba(139, 69, 69, 0.3) 100%);
+            border: 2px solid rgba(255, 100, 100, 0.5);
+            border-radius: 16px 0 0 16px;
+        }
+
+        .reality-column {
+            background: linear-gradient(135deg, rgba(0, 227, 169, 0.15) 0%, rgba(0, 84, 84, 0.3) 100%);
+            border: 2px solid var(--vysus-stockholm-neon);
+            border-radius: 0 16px 16px 0;
+        }
+
+        .arrows-column {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px 10px;
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .arrow {
+            font-size: 32px;
+            color: var(--vysus-stockholm-neon);
+            margin: 15px 0;
+            animation: arrowPulse 2s ease-in-out infinite;
+        }
+
+        .arrow:nth-child(2) { animation-delay: 0.3s; }
+        .arrow:nth-child(3) { animation-delay: 0.6s; }
+        .arrow:nth-child(4) { animation-delay: 0.9s; }
+        .arrow:nth-child(5) { animation-delay: 1.2s; }
+
+        @keyframes arrowPulse {
+            0%, 100% { opacity: 0.5; transform: translateX(0); }
+            50% { opacity: 1; transform: translateX(5px); }
+        }
+
+        .comparison-column h3 {
+            font-size: 22px;
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .perception-column h3 {
+            color: #ff9999;
+        }
+
+        .reality-column h3 {
+            color: var(--vysus-stockholm-neon);
+            animation: textPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes textPulse {
+            0%, 100% {
+                text-shadow: 0 0 10px rgba(0, 227, 169, 0.5);
+            }
+            50% {
+                text-shadow: 0 0 25px rgba(0, 227, 169, 1), 0 0 40px rgba(0, 227, 169, 0.6);
+            }
+        }
+
+        @keyframes itemPulse {
+            0%, 100% {
+                box-shadow: 0 0 5px rgba(0, 227, 169, 0.3);
+            }
+            50% {
+                box-shadow: 0 0 15px rgba(0, 227, 169, 0.7), 0 0 25px rgba(0, 227, 169, 0.4);
+            }
+        }
+
+        .comparison-item {
+            padding: 15px;
+            margin-bottom: 12px;
+            border-radius: 8px;
+            font-size: 15px;
+            line-height: 1.6;
+        }
+
+        .perception-column .comparison-item {
+            background: rgba(255, 100, 100, 0.1);
+            border-left: 3px solid rgba(255, 100, 100, 0.5);
+        }
+
+        .reality-column .comparison-item {
+            background: rgba(0, 227, 169, 0.1);
+            border-left: 3px solid var(--vysus-stockholm-neon);
+        }
+
+        .comparison-item strong {
+            color: var(--vysus-stockholm-neon);
+        }
+
+        /* Opportunity Section */
+        .opportunity-section {
+            background: rgba(0, 227, 169, 0.1);
+            border: 2px solid var(--vysus-stockholm-neon);
+            border-radius: 16px;
+            padding: 40px;
+            margin: 50px 0;
+        }
+
+        .opportunity-section h2 {
+            font-size: 32px;
+            color: var(--vysus-stockholm-neon);
+            margin-bottom: 25px;
+            text-align: center;
+        }
+
+        .opportunity-section > p {
+            font-size: 17px;
+            line-height: 1.8;
+            color: var(--vysus-oslo-snow);
+            max-width: 900px;
+            margin: 0 auto 20px;
+            text-align: center;
+        }
+
+        .highlight-box {
+            background: rgba(0, 84, 84, 0.5);
+            border-radius: 12px;
+            padding: 25px;
+            margin: 30px 0;
+        }
+
+        .highlight-box h4 {
+            color: var(--vysus-stockholm-neon);
+            font-size: 20px;
+            margin-bottom: 20px;
+        }
+
+        .highlight-box ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .highlight-box li {
+            padding: 12px 18px;
+            margin-bottom: 10px;
+            background: rgba(0, 227, 169, 0.1);
+            border-left: 4px solid var(--vysus-stockholm-neon);
+            border-radius: 0 8px 8px 0;
+            font-size: 15px;
+            line-height: 1.6;
+        }
+
+        /* Quality Section */
+        .quality-section {
+            background: linear-gradient(135deg, rgba(255, 193, 7, 0.15) 0%, rgba(255, 152, 0, 0.2) 100%);
+            border: 2px solid #ffc107;
+            border-radius: 16px;
+            padding: 35px;
+            margin: 50px 0;
+            text-align: center;
+        }
+
+        .quality-section h2 {
+            font-size: 28px;
+            color: #ffc107;
+            margin-bottom: 20px;
+        }
+
+        .quality-section p {
+            font-size: 17px;
+            line-height: 1.8;
+            color: var(--vysus-oslo-snow);
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .quality-section strong {
+            color: #ffc107;
+        }
+
+        /* Embedded Sections */
+        .embed-section {
+            margin: 50px 0;
+        }
+
+        .embed-section h2 {
+            font-size: 28px;
+            color: var(--vysus-stockholm-neon);
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        .embed-section > p {
+            text-align: center;
+            color: var(--vysus-oslo-snow);
+            margin-bottom: 25px;
+        }
+
+        .embed-container {
+            background: var(--vysus-white);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .embed-container iframe {
+            width: 100%;
+            height: 650px;
+            border: none;
+        }
+
+        /* Summary */
+        .summary-section {
+            background: linear-gradient(135deg, rgba(0, 227, 169, 0.2) 0%, rgba(0, 84, 84, 0.4) 100%);
+            border: 2px solid var(--vysus-stockholm-neon);
+            border-radius: 16px;
+            padding: 40px;
+            margin: 50px 0;
+            text-align: center;
+        }
+
+        .summary-section h2 {
+            font-size: 28px;
+            color: var(--vysus-stockholm-neon);
+            margin-bottom: 20px;
+        }
+
+        .summary-section p {
+            font-size: 17px;
+            line-height: 1.8;
+            color: var(--vysus-oslo-snow);
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 50px;
+            padding-top: 30px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .footer p {
+            color: var(--vysus-bergen-rain);
+            font-size: 13px;
+        }
+
+        @media (max-width: 768px) {
+            .comparison-wrapper {
+                flex-direction: column;
+            }
+            .arrows-column {
+                flex-direction: row;
+                padding: 15px;
+            }
+            .arrow {
+                transform: rotate(90deg);
+                margin: 0 10px;
+            }
+            .perception-column, .reality-column {
+                border-radius: 16px;
+            }
+            .elephant-trigger {
+                flex-direction: column;
+                text-align: center;
+            }
+            .elephant-trigger-text {
+                text-align: center;
+            }
+            .change-title {
+                font-size: 48px;
+                letter-spacing: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <svg class="vysus-marque" viewBox="0 0 100 112" xmlns="http://www.w3.org/2000/svg">
+                <path d="M0 0 L38.7 112.2 L85 112.2 L46.2 0 Z" fill="#00E3A9"/>
+                <path d="M86.2 2.8 L74.8 10.9 L67.6 22.6 L65.7 36.1 L68.5 48.1 L76.9 59.8 L88.2 66.6 L100 68.6 L100 0 Z" fill="#00E3A9"/>
+            </svg>
+            <h1>Team Meeting</h1>
+            <div class="date">14 January 2026</div>
+            <div class="tagline">Ingenuity. Imagination. Insight.</div>
+        </header>
+
+        <!-- Updates Section -->
+        <section class="news-section" style="cursor: pointer;" onclick="toggleUpdates()">
+            <h2>Updates</h2>
+            <p style="font-size: 14px; color: var(--vysus-bergen-rain); margin-top: 10px;">Click to expand</p>
+        </section>
+
+        <div class="amani-content" id="updatesContent">
+            <!-- Welcome Nanibabu -->
+            <div style="background: rgba(0, 227, 169, 0.1); border: 2px solid var(--vysus-stockholm-neon); border-radius: 16px; padding: 35px; margin-bottom: 20px; text-align: left;">
+                <h3 style="color: var(--vysus-stockholm-neon); font-size: 22px; margin-bottom: 15px;">Welcome to the Team!</h3>
+                <p style="font-size: 17px; line-height: 1.9; color: var(--vysus-oslo-snow); margin-bottom: 15px;">
+                    Please join me in welcoming <strong style="color: var(--vysus-stockholm-neon);">Nanibabu Sampatirao</strong> to Vysus India!
+                </p>
+                <p style="font-size: 17px; line-height: 1.9; color: var(--vysus-oslo-snow); margin-bottom: 15px;">
+                    Nanibabu joins us as a <strong style="color: var(--vysus-stockholm-neon);">Power System Engineer</strong> based in our Bangalore office.
+                    He brings research expertise in smart grid solutions, demand-side management, and renewable energy integration including solar, wind, and EV systems.
+                </p>
+                <p style="font-size: 17px; line-height: 1.9; color: var(--vysus-oslo-snow); margin-bottom: 15px;">
+                    With his PhD research background in optimization algorithms and experience with ETAP, MATLAB, and Python, Nanibabu strengthens our India team's technical capabilities.
+                </p>
+                <p style="font-size: 20px; color: var(--vysus-stockholm-neon); font-weight: 500; text-align: center; margin-top: 20px;">
+                    Welcome aboard, Nanibabu!
+                </p>
+                <p style="font-size: 15px; color: var(--vysus-bergen-rain); text-align: center; margin-top: 15px;">
+                    Started: 12 January 2026
+                </p>
+            </div>
+
+            <!-- Amani -->
+            <div style="background: rgba(0, 227, 169, 0.1); border: 2px solid var(--vysus-stockholm-neon); border-radius: 16px; padding: 35px; margin-bottom: 40px; text-align: left;">
+                <h3 style="color: var(--vysus-stockholm-neon); font-size: 22px; margin-bottom: 15px;">Amani</h3>
+                <p style="font-size: 17px; line-height: 1.9; color: var(--vysus-oslo-snow); margin-bottom: 15px;">
+                    Amani will be moving on from Vysus.
+                </p>
+                <p style="font-size: 17px; line-height: 1.9; color: var(--vysus-oslo-snow); margin-bottom: 15px;">
+                    I want to thank Amani for her <strong style="color: var(--vysus-stockholm-neon);">amazing efforts on business development</strong>.
+                    She has made a real impact during her time here and we're grateful for everything she's contributed.
+                </p>
+                <p style="font-size: 17px; line-height: 1.9; color: var(--vysus-oslo-snow); margin-bottom: 15px;">
+                    Amani is pursuing a new direction that aligns with her personal goals - we support her fully in this.
+                </p>
+                <p style="font-size: 20px; color: var(--vysus-stockholm-neon); font-weight: 500; text-align: center; margin-top: 20px;">
+                    Good luck Amani! We wish you all the best.
+                </p>
+                <p style="font-size: 15px; color: var(--vysus-bergen-rain); text-align: center; margin-top: 15px;">
+                    Amani's last day will be 8 February.
+                </p>
+            </div>
+        </div>
+
+        <!-- The Elephant in the Room -->
+        <section class="elephant-section">
+            <div class="news-section" style="cursor: pointer; padding: 50px 30px;" onclick="toggleElephant()">
+                <img src="https://images.unsplash.com/photo-1557050543-4d5f4e07ef46?w=800&h=500&fit=crop" alt="Elephant" style="width: 100%; max-width: 600px; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); margin-bottom: 25px;">
+                <h2 style="font-size: 36px; margin-top: 10px;">The Elephant in the Room</h2>
+                <p style="font-size: 16px; color: var(--vysus-bergen-rain); margin-top: 10px;">Let's talk about what everyone's thinking... Click to expand</p>
+            </div>
+
+            <div class="elephant-content" id="elephantContent">
+                <div class="elephant-message">
+                    <p>
+                        Vysus has been through significant changes over the last six months.
+                        Everyone talks in this industry, and when I speak to clients,
+                        one of the first things I hear is <em>"who's still over there now?"</em>
+                    </p>
+
+                    <div class="key-statement">
+                        <p>
+                            <strong>Change happens.</strong> It's a natural part of any business.<br><br>
+                            It's easy to get stuck in the negative - but <strong>focusing on the positive is our only choice</strong>,
+                            and it actually provides you with opportunities you didn't have before.
+                        </p>
+                    </div>
+
+                    <p>
+                        We are aligning and adapting quickly as a team to position ourselves for success.
+                        The team has already moved back to a known <strong>'Pod' structure</strong> - a model we know works.
+                        We are adapting fast.
+                    </p>
+
+                    <p>
+                        There's also a strong push to acquire another Principal - activity is underway with recruiters to support this.
+                        We're not standing still.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Perception vs Reality with Arrows -->
+        <section class="comparison-section">
+            <div class="news-section" style="cursor: pointer;" onclick="toggleComparison()">
+                <h2>What People Are Saying vs The Reality</h2>
+                <p style="font-size: 14px; color: var(--vysus-bergen-rain); margin-top: 10px;">Click to expand</p>
+            </div>
+
+            <div class="elephant-content" id="comparisonContent">
+            <div class="comparison-wrapper" style="margin-top: 30px;">
+                <div class="comparison-column perception-column">
+                    <h3>What People Are Saying</h3>
+                    <div class="comparison-item">
+                        "Who's still there now?"
+                    </div>
+                    <div class="comparison-item">
+                        "There's been so much change"
+                    </div>
+                    <div class="comparison-item">
+                        "Is it stable?"
+                    </div>
+                    <div class="comparison-item">
+                        "Key people have left"
+                    </div>
+                    <div class="comparison-item">
+                        Uncertainty about direction
+                    </div>
+                </div>
+
+                <div class="arrows-column">
+                    <span class="arrow">→</span>
+                    <span class="arrow">→</span>
+                    <span class="arrow">→</span>
+                    <span class="arrow">→</span>
+                    <span class="arrow">→</span>
+                    <span class="arrow">→</span>
+                </div>
+
+                <div class="comparison-column reality-column">
+                    <h3>The Reality</h3>
+                    <p style="font-size: 15px; line-height: 1.7; color: var(--vysus-oslo-snow); margin-bottom: 20px; padding: 15px; background: rgba(0, 84, 84, 0.4); border-radius: 8px;">
+                        We have a strong team with very happy customers. The industry knows we have highly experienced Principals and leads.
+                    </p>
+                    <div class="comparison-item">
+                        <strong>Pod structure</strong> - Team reorganised to proven model, adapting quickly
+                    </div>
+                    <div class="comparison-item" style="animation: itemPulse 2s ease-in-out infinite;">
+                        <span style="background: var(--vysus-stockholm-neon); color: var(--vysus-trondheim-night); padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; margin-right: 8px;">NEW</span>
+                        <strong>Technical Sales Team</strong> - For the first time, Vysus has a dedicated Technical Sales Team: Tony, Momtaz and Naveen
+                    </div>
+                    <div class="comparison-item">
+                        <strong>RPs empowered</strong> - Capability flyer comms enabling network outreach
+                    </div>
+                    <div class="comparison-item">
+                        <strong>Principal recruitment active</strong> - Working with recruiters now
+                    </div>
+                    <div class="comparison-item">
+                        <strong>Growth industry</strong> - Business conditions don't get better than this
+                    </div>
+                    <div class="comparison-item" style="animation: itemPulse 2s ease-in-out infinite;">
+                        <strong>Clear direction</strong> - No uncertainty. We are focused, aligned, and moving forward together
+                    </div>
+                </div>
+            </div>
+            </div>
+        </section>
+
+        <!-- Opportunity Section -->
+        <section class="opportunity-section">
+            <h2>The Opportunity for YOU</h2>
+            <p>
+                <strong>Change is a natural part of any business.</strong>
+                It actually provides you with opportunities you didn't have before.
+            </p>
+            <p>
+                Everyone has been through reviews in the last few months. From what I can tell,
+                we are very competitive - most of you are happy, very happy.
+                <strong>Vysus is here. Thomas is aware and has supported you.</strong>
+                For others, further improvements will come as we continue to grow.
+            </p>
+
+            <div class="highlight-box">
+                <h4>What's Changed for the Better</h4>
+                <ul>
+                    <li><strong>Team Structure</strong> - Pod model in place with clear resource management</li>
+                    <li><strong>Technical Sales Team</strong> - Tony, Momtaz and Naveen lead our technical client interface</li>
+                    <li><strong>RP Network Outreach</strong> - All RPs empowered with capability flyer comms to reach their networks</li>
+                    <li><strong>Your Platform</strong> - Those leading are now being seen as Vysus's trusted experts</li>
+                </ul>
+            </div>
+
+            <p>
+                While we have challenges, we are in a <strong>growth industry</strong>.
+                The energy transition isn't slowing down - and Vysus is positioned right in the middle of it.
+            </p>
+        </section>
+
+        <!-- Quality Focus -->
+        <section class="quality-section">
+            <h2>Focus on Quality</h2>
+            <p>
+                We must keep up the good work with a <strong>focus on quality</strong>.<br><br>
+                I encourage you to <strong>ask questions</strong> - you must ask questions and ensure the quality of your work.
+                If something isn't clear, speak up. Quality is everyone's responsibility.
+            </p>
+        </section>
+
+        <!-- Industry Position -->
+        <section class="link-section" style="background: rgba(0, 227, 169, 0.1); border: 2px solid var(--vysus-stockholm-neon); border-radius: 16px; padding: 40px; margin: 50px 0; text-align: center;">
+            <h2 style="font-size: 28px; color: var(--vysus-stockholm-neon); margin-bottom: 15px;">Our Industry Position</h2>
+            <p style="color: var(--vysus-oslo-snow); margin-bottom: 30px;">See where we sit in the energy ecosystem - Investors, Developers, NSPs, AEMO and more</p>
+
+            <!-- Project Lifecycle Flow -->
+            <div style="display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 8px; padding: 25px; background: rgba(0, 84, 84, 0.4); border-radius: 12px; margin-top: 20px;">
+                <div style="background: var(--vysus-stockholm-neon); color: var(--vysus-trondheim-night); padding: 12px 18px; border-radius: 8px; font-weight: 600; font-size: 14px;">
+                    1. Funding $
+                </div>
+                <span style="color: var(--vysus-stockholm-neon); font-size: 24px;">→</span>
+                <div style="background: var(--vysus-stockholm-neon); color: var(--vysus-trondheim-night); padding: 12px 18px; border-radius: 8px; font-weight: 600; font-size: 14px;">
+                    2. Development
+                </div>
+                <span style="color: var(--vysus-stockholm-neon); font-size: 24px;">→</span>
+                <div style="background: var(--vysus-stockholm-neon); color: var(--vysus-trondheim-night); padding: 12px 18px; border-radius: 8px; font-weight: 600; font-size: 14px;">
+                    3. Connection
+                </div>
+                <span style="color: var(--vysus-stockholm-neon); font-size: 24px;">→</span>
+                <div style="background: var(--vysus-stockholm-neon); color: var(--vysus-trondheim-night); padding: 12px 18px; border-radius: 8px; font-weight: 600; font-size: 14px;">
+                    4. Construction
+                </div>
+                <span style="color: var(--vysus-stockholm-neon); font-size: 24px;">→</span>
+                <div style="background: var(--vysus-stockholm-neon); color: var(--vysus-trondheim-night); padding: 12px 18px; border-radius: 8px; font-weight: 600; font-size: 14px;">
+                    5. R1/R2
+                </div>
+                <span style="color: var(--vysus-stockholm-neon); font-size: 24px;">→</span>
+                <div style="background: var(--vysus-stockholm-neon); color: var(--vysus-trondheim-night); padding: 12px 18px; border-radius: 8px; font-weight: 600; font-size: 14px;">
+                    6. COD
+                </div>
+            </div>
+            <p style="color: var(--vysus-bergen-rain); font-size: 13px; margin-top: 15px;">Project Lifecycle: From funding through to Commercial Operation Date</p>
+        </section>
+
+        <!-- Team Structure -->
+        <section class="link-section" style="background: rgba(0, 227, 169, 0.1); border: 2px solid var(--vysus-stockholm-neon); border-radius: 16px; padding: 40px; margin: 50px 0; text-align: center;">
+            <h2 style="font-size: 28px; color: var(--vysus-stockholm-neon); margin-bottom: 15px;">Our Team Structure</h2>
+            <p style="color: var(--vysus-oslo-snow);">Clear lines, quality checks, cross-team collaboration, and technical client interface</p>
+        </section>
+
+        <!-- Summary -->
+        <section class="summary-section">
+            <h2>Looking Forward</h2>
+            <p>
+                This is a new year update to reassure you about where we are and where we're going.
+                We have strong structures in place, clear leadership, and a growing market.
+                The changes we've been through have made us leaner and more focused.
+                <strong>The opportunity is yours to take.</strong>
+            </p>
+        </section>
+
+        <footer class="footer">
+            <svg style="width: 40px; height: auto; margin-bottom: 15px;" viewBox="0 0 100 112" xmlns="http://www.w3.org/2000/svg">
+                <path d="M0 0 L38.7 112.2 L85 112.2 L46.2 0 Z" fill="#005454"/>
+                <path d="M86.2 2.8 L74.8 10.9 L67.6 22.6 L65.7 36.1 L68.5 48.1 L76.9 59.8 L88.2 66.6 L100 68.6 L100 0 Z" fill="#005454"/>
+            </svg>
+            <p>Vysus Group | 14 January 2026</p>
+        </footer>
+    </div>
+
+    <script>
+        function toggleUpdates() {
+            const content = document.getElementById('updatesContent');
+            content.classList.toggle('revealed');
+        }
+
+        function toggleElephant() {
+            const content = document.getElementById('elephantContent');
+            content.classList.toggle('revealed');
+        }
+
+        function toggleComparison() {
+            const content = document.getElementById('comparisonContent');
+            content.classList.toggle('revealed');
+        }
+    </script>
+</body>
+</html>
